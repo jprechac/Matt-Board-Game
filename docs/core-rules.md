@@ -12,17 +12,21 @@ This board game is a turn-based military strategy game where each player control
 
 ### Players
 
-The game is played by either 2 or 4 players. 
+The game is played by either 2 or 4 players. The game is played as a 1v1 with 2 players or 2 teams of 2 (2v2) with 4 players.
 
 ### Board
 
-The board is played on a rectangular hex-grid board, 20x15 (wider than it is tall). Each player has a *Base* of 7 squares (4 in the back, 3 in the front) along the back middle of their side of the board. Each player has a *Placement Zone* on their side of the board where units can be placed during the Setup phase. This *Placement Zone* is the nearest 4 rows on each player's side of the board.
+The board is played on a rectangular hex-grid board, 16x19 in a 2-player game and 18x22 in a 4-player game (wider than it is tall). Each player has a *Base* of 7 squares (4 in the back, 3 in the front) along the back middle of their side of the board. Each player has a *Placement Zone* on their side of the board where units can be placed during the Setup phase. This *Placement Zone* is the nearest 4 rows on each player's side of the board.
 
 Each unit exists in 1 hex on the grid. Only 1 unit can be in 1 hex at a time, and units cannot move through hexes occupied by another unit.
 
 ## Setup
 
 ### Selecting a faction
+
+### Selecting army units
+
+### Placing units
 
 ## Gameplay
 
@@ -32,7 +36,7 @@ Each unit exists in 1 hex on the grid. Only 1 unit can be in 1 hex at a time, an
 
 #### Attacking
 
-*Ranged attacking rules*
+**Ranged attacking rules**
 - Range
 - Critical hits
 
