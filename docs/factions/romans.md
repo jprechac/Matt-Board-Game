@@ -15,4 +15,4 @@
 | Centurion | 6 | 3 | 1 | 2 | 4+ | Can command a Basic Melee unit to attack again. |
 
 <!-- Footnotes -->
-[^#2]: Suggested change: `Redirect one enemy attack per turn to any unit adjacent to the target.`
+[^#2]: Suggested change: `Redirect one enemy attack per turn to any unit adjacent to the target.` [#2](https://github.com/jprechac/Matt-Board-Game/issues/2)

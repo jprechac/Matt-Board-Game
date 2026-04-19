@@ -15,4 +15,4 @@
 | Mounted Swordsman | 6 | 4 | 1 | 2 | 4+ | None |
 
 <!-- Footnotes -->
-[^#3]: Need Attila's stats
+[^#3]: Need Attila's stats [#3](https://github.com/jprechac/Matt-Board-Game/issues/3)

@@ -15,4 +15,4 @@
 | Janissary | 6 | 3/2[^#1] | 4 | 2 (3 on 8+) | 4+ (4+ within 2 hexes) | Must skip turn to reload. |
 
 <!-- Footnotes -->
-[^#1]: Question for Matt: What does `3/2` mean?
+[^#1]: Question for Matt: What does `3/2` mean? [#1](https://github.com/jprechac/Matt-Board-Game/issues/1)
