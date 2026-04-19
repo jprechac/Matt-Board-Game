@@ -72,6 +72,7 @@ The game has the following factions:
 | [Aztecs](factions/aztecs.md) | Itzcoatl | Jaguar Warrior, Priest |
 | [Bulgars](factions/bulgars.md) | Khan Krum | Light Cavaly, Heavy Cavalry |
 | [English](factions/english.md) | King Arthur | Longbowman, Knight |
+| [Huns](factions/huns.md) | Attila the Hun | Mounted Archer, Mounted Swordsman |
 | [Japanese](factions/japanese.md) | Oda Nobunaga | Samurai |
 | [Mongols](factions/mongols.md) | Genghis Khan | Kheshig, Pillager |
 | [Muscovites](factions/muscovites.md) | Ivan the Terrible | Streltsy, Cossack Cav |
