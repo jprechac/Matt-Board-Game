@@ -20,7 +20,7 @@ The game is played by either 2 or 4 players. The game is played as a 1v1 with 2 
 
 ### Board
 
-The board is played on a rectangular hex-grid board, 18x19 in a 2-player game and 18x22 in a 4-player game (wider than it is tall). Each player has a *Base* of 7 squares (4 in the back, 3 in the front) along the back middle of their side of the board. Each player has a *Placement Zone* on their side of the board where units can be placed during the [**Setup**](#setup) phase. This *Placement Zone* is the nearest 3 rows on each player's side of the board.
+The board is played on a rectangular hex-grid board, 18x19 in a 2-player game and 22x19 in a 4-player game (board length is always 19, width is the only thing that changes). Each player has a *Base* of 7 squares (4 in the back, 3 in the front) along the back middle of their side of the board. Each player has a *Placement Zone* on their side of the board where units can be placed during the [**Setup**](#setup) phase. This *Placement Zone* is the nearest 3 rows on each player's side of the board.
 
 The board also features modifiable [**Terrain**](#terrain), which each player can select from a set pool of options and place 2 Terrain pieces during their setup phase. Players can place Terrain anywhere their *Terrain Placement Zone* which is the nearest 5 rows on their side of the board.
 
