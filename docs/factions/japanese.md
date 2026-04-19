@@ -1,4 +1,4 @@
-# --- Faction
+# Japanese Faction
 
 ## Description
 

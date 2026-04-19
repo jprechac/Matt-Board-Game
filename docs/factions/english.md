@@ -1,4 +1,4 @@
-# --- Faction
+# English Faction
 
 ## Description
 

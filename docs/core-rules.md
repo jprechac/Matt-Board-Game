@@ -16,7 +16,7 @@ The game is played by either 2 or 4 players. The game is played as a 1v1 with 2 
 
 ### Board
 
-The board is played on a rectangular hex-grid board, 16x19 in a 2-player game and 18x22 in a 4-player game (wider than it is tall). Each player has a *Base* of 7 squares (4 in the back, 3 in the front) along the back middle of their side of the board. Each player has a *Placement Zone* on their side of the board where units can be placed during the Setup phase. This *Placement Zone* is the nearest 4 rows on each player's side of the board.
+The board is played on a rectangular hex-grid board, 18x19 in a 2-player game and 18x22 in a 4-player game (wider than it is tall). Each player has a *Base* of 7 squares (4 in the back, 3 in the front) along the back middle of their side of the board. Each player has a *Placement Zone* on their side of the board where units can be placed during the Setup phase. This *Placement Zone* is the nearest 4 rows on each player's side of the board.
 
 Each unit exists in 1 hex on the grid. Only 1 unit can be in 1 hex at a time, and units cannot move through hexes occupied by another unit.
 
@@ -36,9 +36,16 @@ Each unit exists in 1 hex on the grid. Only 1 unit can be in 1 hex at a time, an
 
 #### Attacking
 
+When a unit attacks another unit, the attacking unit must roll an 8-sided die ("d8"). The unit's **To Hit** bonus determines what die roll results in a hit. For example, a Basic Melee unit has a To Hit of *+4*, so if the die roll is 4 or higher, the attack hits and deals the amount of damage listed for that unit - in this case, 2 damage.
+
+All attacks have a **Range**, which determines how many tiles a unit can attack in. A Range of 1 is melee range, and any range above 1 is generally a ranged attack.
+
 **Ranged attacking rules**
-- Range
-- Critical hits
+
+A few special rules apply to ranged attacks: 
+1. A ranged attack may target any unit within its radius.
+2. A ranged attack at melee range (i.e., targetting an adjacent unit) is conducted at disadvantage
+3. Critical hits
 
 ### Winning
 
