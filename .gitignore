@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Test / coverage
+coverage/
+
+# Simulation reports
+reports/
+
+# SQLite databases
+*.db
+*.db-wal
+*.db-shm
+
+# Editor / IDE
+.vscode/
+*.swp
+*.swo
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Misc
+*.tsbuildinfo
+*.log
