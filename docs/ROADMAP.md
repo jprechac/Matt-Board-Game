@@ -113,7 +113,7 @@ src/engine/
 - [ ] **Vandals Heavy Cavalry** missing ability implementation — design doc says "-1 To Hit penalty if attacking a unit in melee range" but no handler exists and no `abilityId` is assigned in faction data.
 - [ ] **Stub abilities** — `priest_buff`, `upgrade_unit`, `redirect_attack`, `medic_heal`, `siege_movement_buff`, `attila_tbd` are registered but have no real logic (return `{}` or `true`). Will be filled in as terrain and active-ability actions are implemented.
 - [ ] **Ability actions** — `useAbility` action type exists in types but `applyAction` throws "not implemented". Active abilities (as opposed to passive hooks) need a handler dispatch system.
-- [ ] **4-player board** — Base zones and placement zones only handle 2-player (top/bottom). 4-player corner layout is TBD.
+- [ ] **4-player game flow** — Board zones are correct (2v2 teams share top/bottom bases on wider board), but game.ts setup/placement logic doesn't yet handle 4-player team mechanics (team roll-off, A→C→B→D placement order, team-based win conditions).
 - [ ] **Terrain system** — Fully stubbed; design doc says "Jordan note: I don't know how Terrain works." Blocked on rules finalization.
 - [ ] **Test coverage gaps** — `getReachableHexes()` not directly tested; combat tests use seed-hunting pattern; ~12 abilities lack dedicated tests; validation.ts gameplay validators undertested.
 
@@ -121,7 +121,7 @@ src/engine/
 
 ### Phase 2: Game Event & Replay System
 
-> **Status:** Not started
+> **Status:** Not started<br>
 > **Depends on:** Phase 1
 
 **Goal:** Record every game event for replay, debugging, logging, and statistics.

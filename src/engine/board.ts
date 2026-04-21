@@ -13,7 +13,8 @@ import { offsetToCube, hexKey } from './hex.js';
  * Create a game board with all zones marked.
  *
  * 2-player layout: player1 at row 0 (top), player2 at row height-1 (bottom).
- * 4-player layout: player1 top-left, player2 top-right, player3 bottom-left, player4 bottom-right.
+ * 4-player layout (2v2): teams share bases — team1 (player1+player3) at top,
+ * team2 (player2+player4) at bottom. Same base layout as 2p, just wider board.
  */
 export function createBoard(size: BoardSize): Board {
   const { width, height } = size === '2p' ? BOARD_2P : BOARD_4P;
@@ -56,8 +57,8 @@ function getBasePlayer(
     // Player 2: rows height-2 to height-1 (bottom)
     if (isInBase(col, row, width, height - 1)) return 'player2';
   } else {
-    // 4-player: bases in corners — TBD for 4p layout
-    // For now, same as 2p (top/bottom)
+    // 4-player (2v2): teams share bases, same top/bottom layout as 2p
+    // Team 1 (player1+player3) at top, Team 2 (player2+player4) at bottom
     if (isInBase(col, row, width, 0)) return 'player1';
     if (isInBase(col, row, width, height - 1)) return 'player2';
   }
@@ -86,13 +87,17 @@ function isInBase(col: number, row: number, width: number, edgeRow: number): boo
   return false;
 }
 
-function getPlacementZonePlayer(row: number, height: number, _size: BoardSize): PlayerId | undefined {
+function getPlacementZonePlayer(row: number, height: number, size: BoardSize): PlayerId | undefined {
+  // In 4p (2v2), teams share placement zones: team1 top, team2 bottom.
+  // Zone returns the "team representative" player (player1/player2). The game
+  // engine checks team membership to allow all team members to place here.
   if (row < PLACEMENT_ZONE_DEPTH) return 'player1';
   if (row >= height - PLACEMENT_ZONE_DEPTH) return 'player2';
   return undefined;
 }
 
-function getTerrainPlacementZonePlayer(row: number, height: number, _size: BoardSize): PlayerId | undefined {
+function getTerrainPlacementZonePlayer(row: number, height: number, size: BoardSize): PlayerId | undefined {
+  // Same team-based convention as placement zones
   if (row < TERRAIN_PLACEMENT_ZONE_DEPTH) return 'player1';
   if (row >= height - TERRAIN_PLACEMENT_ZONE_DEPTH) return 'player2';
   return undefined;

@@ -103,6 +103,35 @@ describe('createBoard', () => {
     it('has width * height cells', () => {
       expect(Object.keys(board.cells)).toHaveLength(BOARD_4P.width * BOARD_4P.height);
     });
+
+    it('has same base layout as 2p (teams share top/bottom bases)', () => {
+      const p1Bases = getBaseCells(board, 'player1');
+      const p2Bases = getBaseCells(board, 'player2');
+
+      // Same 7-cell base structure (4 back + 3 front)
+      expect(p1Bases).toHaveLength(BASE_BACK_ROW_SIZE + BASE_FRONT_ROW_SIZE);
+      expect(p2Bases).toHaveLength(BASE_BACK_ROW_SIZE + BASE_FRONT_ROW_SIZE);
+
+      // Bases are at top and bottom, centered on wider board
+      const p1Rows = new Set(p1Bases.map(c => cubeToOffset(c.coord).row));
+      const p2Rows = new Set(p2Bases.map(c => cubeToOffset(c.coord).row));
+      expect(p1Rows).toEqual(new Set([0, 1])); // top
+      expect(p2Rows).toEqual(new Set([BOARD_4P.height - 2, BOARD_4P.height - 1])); // bottom
+    });
+
+    it('has placement zones on top/bottom (shared by teams)', () => {
+      const topZone = getPlacementZoneCells(board, 'player1');
+      const bottomZone = getPlacementZoneCells(board, 'player2');
+
+      expect(topZone.length).toBe(BOARD_4P.width * PLACEMENT_ZONE_DEPTH);
+      expect(bottomZone.length).toBe(BOARD_4P.width * PLACEMENT_ZONE_DEPTH);
+
+      // All top zone cells are in first 3 rows
+      for (const cell of topZone) {
+        const { row } = cubeToOffset(cell.coord);
+        expect(row).toBeLessThan(PLACEMENT_ZONE_DEPTH);
+      }
+    });
   });
 });
 
