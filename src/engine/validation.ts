@@ -196,6 +196,9 @@ function validateEndUnitTurn(state: GameState, action: EndUnitTurnAction): Valid
   if (unit.playerId !== state.currentPlayerId) {
     return { valid: false, reason: 'Not your unit' };
   }
+  if (unit.activatedThisTurn) {
+    return { valid: false, reason: 'Unit has already been activated this turn' };
+  }
   if (state.activeUnitId && state.activeUnitId !== action.unitId) {
     return { valid: false, reason: 'Cannot end turn for inactive unit' };
   }

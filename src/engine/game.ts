@@ -609,7 +609,10 @@ function replaceUnit(units: readonly Unit[], updated: Unit): Unit[] {
 }
 
 function ensureActivated(unit: Unit): Unit {
-  return unit.activatedThisTurn ? unit : { ...unit, activatedThisTurn: false };
+  // Identity — activation tracking is handled by activeUnitId (current) and
+  // activatedThisTurn (exhausted, set by endUnitTurn). This hook exists for
+  // potential future per-unit activation logic.
+  return unit;
 }
 
 function getNextPlayerIndex(state: GameState): number {
