@@ -9,3 +9,7 @@ export * from './board.js';
 export * from './movement.js';
 export * from './combat.js';
 export { registerAllAbilities, getAbility, getAttackModifiers, getDefenseModifiers, getMovementModifiers } from './abilities/index.js';
+export { createGame, applyAction } from './game.js';
+export type { GameConfig } from './game.js';
+export { validateAction } from './validation.js';
+export type { ValidationResult } from './validation.js';

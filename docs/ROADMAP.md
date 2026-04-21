@@ -33,7 +33,7 @@
 
 ### Phase 1: Core Game Engine
 
-> **Status:** In progress (Chunk 3 of 3)
+> **Status:** ✅ Complete
 > **Depends on:** Nothing (this is the foundation)
 
 **Goal:** Implement all game rules as a pure, testable, headless TypeScript library.
@@ -47,11 +47,11 @@
 - [x] Combat system — d8 rolls, To Hit thresholds, damage, ranged disadvantage at adjacent range, unit death
 - [x] Special abilities — composable ability handlers (strategy/plugin pattern); TBD abilities get stub implementations
 - [x] Terrain system (stub) — define interface + placement rules; plug in effects when rules finalized
-- [ ] Game state machine — Setup → Placement → Gameplay → Victory; turn tracking, base control timers
-- [ ] Action validation & execution — validate legality, return new immutable `GameState`
-- [ ] Setup phase logic — roll-off, faction selection, army composition (3-5-1), alternating placement
-- [ ] Win condition checking — base control timer (3 turns / 2 for Mongols), all-units-defeated, surrender
-- [ ] Unit tests — extensive coverage for every mechanic
+- [x] Game state machine — Setup → Placement → Gameplay → Victory; turn tracking, base control timers
+- [x] Action validation & execution — validate legality, return new immutable `GameState`
+- [x] Setup phase logic — roll-off, faction selection, army composition (3-5-1), alternating placement
+- [x] Win condition checking — base control timer (3 turns / 2 for Mongols), all-units-defeated, surrender
+- [x] Unit tests — extensive coverage for every mechanic (195 tests across 10 test files)
 
 <details>
 <summary>Implementation chunks</summary>
@@ -74,7 +74,7 @@
 5. `src/engine/abilities/` — Composable ability handler system + all 25 faction ability implementations
 6. Tests: board creation, movement, combat, all 11 faction abilities (156 total tests)
 
-#### Chunk 3: Game Flow + Integration
+#### Chunk 3: Game Flow + Integration ✅
 
 1. `src/engine/game.ts` — State machine: Setup → Placement → Gameplay → Victory
 2. `src/engine/validation.ts` — Action legality, returns new immutable GameState

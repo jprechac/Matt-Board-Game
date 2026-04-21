@@ -22,6 +22,7 @@ function makeUnit(overrides: Partial<Unit> & { id: string; position: Unit['posit
     hasAttackedThisTurn: false,
     hasUsedAbilityThisTurn: false,
     movementUsedThisTurn: 0,
+    activatedThisTurn: false,
     abilityState: {},
     ...overrides,
   };

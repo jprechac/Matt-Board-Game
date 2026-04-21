@@ -102,6 +102,7 @@ export interface Unit {
   readonly hasAttackedThisTurn: boolean;
   readonly hasUsedAbilityThisTurn: boolean;
   readonly movementUsedThisTurn: number;
+  readonly activatedThisTurn: boolean;
   readonly abilityState: Record<string, unknown>;
 }
 
@@ -236,6 +237,8 @@ export interface SetupState {
   readonly currentStep: SetupStep;
   readonly currentPlayerIndex: number;
   readonly placementCount: number;
+  readonly batchCount: number; // 0, 1 within a 2-unit batch
+  readonly unplacedRoster: Partial<Record<PlayerId, readonly string[]>>; // unitTypeIds remaining
 }
 
 export interface PlayerState {
