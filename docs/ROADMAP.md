@@ -110,6 +110,12 @@ src/engine/
 
 **Known Issues:**
 - [ ] **Streltsy defense ability** (`src/engine/abilities/handlers.ts`) — `onDefend` blocks ALL attacks from moved units regardless of attacker range. Per `docs/factions/muscovites.md`, should only block melee (range 1) move-and-attack. Needs range check on attacker's attack profile + test coverage.
+- [ ] **Vandals Heavy Cavalry** missing ability implementation — design doc says "-1 To Hit penalty if attacking a unit in melee range" but no handler exists and no `abilityId` is assigned in faction data.
+- [ ] **Stub abilities** — `priest_buff`, `upgrade_unit`, `redirect_attack`, `medic_heal`, `siege_movement_buff`, `attila_tbd` are registered but have no real logic (return `{}` or `true`). Will be filled in as terrain and active-ability actions are implemented.
+- [ ] **Ability actions** — `useAbility` action type exists in types but `applyAction` throws "not implemented". Active abilities (as opposed to passive hooks) need a handler dispatch system.
+- [ ] **4-player board** — Base zones and placement zones only handle 2-player (top/bottom). 4-player corner layout is TBD.
+- [ ] **Terrain system** — Fully stubbed; design doc says "Jordan note: I don't know how Terrain works." Blocked on rules finalization.
+- [ ] **Test coverage gaps** — `getReachableHexes()` not directly tested; combat tests use seed-hunting pattern; ~12 abilities lack dedicated tests; validation.ts gameplay validators undertested.
 
 ---
 
