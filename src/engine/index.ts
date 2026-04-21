@@ -5,3 +5,7 @@ export * from './hex.js';
 export { SeededRNG } from './rng.js';
 export { BASIC_MELEE, BASIC_RANGED, BASIC_UNITS } from './data/basic-units.js';
 export { FACTIONS, getFaction, getUnitDef } from './data/factions/index.js';
+export * from './board.js';
+export * from './movement.js';
+export * from './combat.js';
+export { registerAllAbilities, getAbility, getAttackModifiers, getDefenseModifiers, getMovementModifiers } from './abilities/index.js';

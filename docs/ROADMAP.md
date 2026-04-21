@@ -33,25 +33,57 @@
 
 ### Phase 1: Core Game Engine
 
-> **Status:** Not started
+> **Status:** In progress (Chunk 3 of 3)
 > **Depends on:** Nothing (this is the foundation)
 
 **Goal:** Implement all game rules as a pure, testable, headless TypeScript library.
 
-- [ ] Data model & types — `GameState`, `Unit`, `Faction`, `Hex`, `Board`, `Action`, `Player`, `TurnPhase`, etc.
-- [ ] Faction & unit data files — all stats/abilities in JSON/TS data files (not hardcoded), enabling balance tweaks without code changes
-- [ ] Hex grid system — cube coordinates, distance, neighbors, line-of-sight, BFS pathfinding, range calculations
-- [ ] Board generation — 2-player (18×19) and 4-player (22×19) with base zones, placement zones, terrain zones
+- [x] Data model & types — `GameState`, `Unit`, `Faction`, `Hex`, `Board`, `Action`, `Player`, `TurnPhase`, etc.
+- [x] Faction & unit data files — all stats/abilities in JSON/TS data files (not hardcoded), enabling balance tweaks without code changes
+- [x] Hex grid system — cube coordinates, distance, neighbors, line-of-sight, BFS pathfinding, range calculations
+- [x] Seeded RNG — seedable PRNG (Mulberry32) instead of `Math.random()`. Non-negotiable for reproducible simulations
+- [x] Board generation — 2-player (18×19) and 4-player (22×19) with base zones, placement zones, terrain zones
+- [x] Movement system — hex occupancy, movement range, post-attack 1-hex restriction
+- [x] Combat system — d8 rolls, To Hit thresholds, damage, ranged disadvantage at adjacent range, unit death
+- [x] Special abilities — composable ability handlers (strategy/plugin pattern); TBD abilities get stub implementations
+- [x] Terrain system (stub) — define interface + placement rules; plug in effects when rules finalized
 - [ ] Game state machine — Setup → Placement → Gameplay → Victory; turn tracking, base control timers
-- [ ] Movement system — hex occupancy, movement range, post-attack 1-hex restriction
-- [ ] Combat system — d8 rolls, To Hit thresholds, damage, ranged disadvantage at adjacent range, unit death
-- [ ] Seeded RNG — seedable PRNG (e.g., `seedrandom` or xorshift) instead of `Math.random()`. Non-negotiable for reproducible simulations
-- [ ] Special abilities — composable ability handlers (strategy/plugin pattern); TBD abilities get stub implementations
-- [ ] Win condition checking — base control timer (3 turns / 2 for Mongols), all-units-defeated, surrender
 - [ ] Action validation & execution — validate legality, return new immutable `GameState`
 - [ ] Setup phase logic — roll-off, faction selection, army composition (3-5-1), alternating placement
-- [ ] Terrain system (stub) — define interface + placement rules; plug in effects when rules finalized
+- [ ] Win condition checking — base control timer (3 turns / 2 for Mongols), all-units-defeated, surrender
 - [ ] Unit tests — extensive coverage for every mechanic
+
+<details>
+<summary>Implementation chunks</summary>
+
+#### Chunk 1: Foundation ✅
+
+1. Project setup — `package.json`, `tsconfig.json`, `vitest.config.ts`
+2. `src/engine/types.ts` — All game types, interfaces, and constants
+3. `src/engine/rng.ts` — Seeded Mulberry32 PRNG (deterministic d8 rolls)
+4. `src/engine/hex.ts` — Cube coordinates, distance, neighbors, LOS, BFS pathfinding, range
+5. `src/engine/data/` — Basic units + all 11 faction data files with stats/ability identifiers
+6. Tests: hex math, RNG determinism, faction data completeness (72 tests)
+
+#### Chunk 2: Board + Movement + Combat ✅
+
+1. `src/engine/board.ts` — Board generation (18×19 / 22×19), base zones, placement zones, terrain zones
+2. Terrain system stub — interface + placement rules
+3. `src/engine/movement.ts` — Movement validation, occupancy, pathfinding, post-attack restriction
+4. `src/engine/combat.ts` — d8 rolls, To Hit, damage, ranged proximity penalty
+5. `src/engine/abilities/` — Composable ability handler system + all 25 faction ability implementations
+6. Tests: board creation, movement, combat, all 11 faction abilities (156 total tests)
+
+#### Chunk 3: Game Flow + Integration
+
+1. `src/engine/game.ts` — State machine: Setup → Placement → Gameplay → Victory
+2. `src/engine/validation.ts` — Action legality, returns new immutable GameState
+3. Setup phase logic — roll-off, faction selection, army comp (3-5-1), alternating placement
+4. Win conditions — base control timer (3/2 turns for Mongols), all-units-defeated, surrender
+5. Integration test — full scripted game (programmatic moves, verify final state)
+6. Unit tests: game flow, validation, setup, win conditions
+
+</details>
 
 <details>
 <summary>Key files</summary>
@@ -76,6 +108,9 @@ src/engine/
 - Integration test: play a full game programmatically (scripted moves), verify final state
 - Manually verify unit stats match design docs
 
+**Known Issues:**
+- [ ] **Streltsy defense ability** (`src/engine/abilities/handlers.ts`) — `onDefend` blocks ALL attacks from moved units regardless of attacker range. Per `docs/factions/muscovites.md`, should only block melee (range 1) move-and-attack. Needs range check on attacker's attack profile + test coverage.
+
 ---
 
 ### Phase 2: Game Event & Replay System
@@ -91,6 +126,24 @@ src/engine/
 - [ ] Game recorder — capture event stream + initial state + RNG seed; any game can be replayed deterministically
 - [ ] Replay player — step forward/backward through game states (headless; UI replay comes in Phase 7)
 - [ ] Serialization — JSON export/import for game recordings
+
+<details>
+<summary>Implementation chunks</summary>
+
+#### Chunk 1: Event Types + Game Recorder
+
+1. `src/engine/events.ts` — Event type definitions: `UnitMoved`, `AttackRolled`, `DamageDealt`, `UnitKilled`, `AbilityUsed`, `HealPerformed`, `TurnStarted`, `TurnEnded`, `UnitTurnEnded`, `BaseControlChanged`, `BaseControlTimerTick`, `GameWon`, `GameStarted`, `UnitPlaced`, `FactionSelected`, `ArmyCompositionSet`; base event interface with `timestamp`, `turnNumber`, `type`, `playerId`
+2. `src/engine/recorder.ts` — Game recorder: captures event stream, stores initial GameState + RNG seed + board config, provides `record(event)` hook, produces `GameRecording` object
+3. Integrate recorder into `game.ts` — emit events from action execution (move, attack, ability, turn end, win)
+4. Tests: event emission correctness, recorder captures all actions from scripted game
+
+#### Chunk 2: Replay Player + Serialization
+
+1. `src/engine/replay.ts` — Replay player: reconstruct GameState at any point from `GameRecording`, `stepForward()` / `stepBackward()`, `goToTurn(n)`, `goToEvent(index)`; leverages deterministic RNG
+2. `src/engine/serialization.ts` — JSON export/import: `serializeRecording()` / `deserializeRecording()`, schema versioning, import validation
+3. Tests: record → replay → verify states match at every step; forward/backward stepping consistency; export → import round-trip; corrupted JSON import error handling
+
+</details>
 
 **Verification:**
 - Record a scripted game, replay it, verify states match
@@ -114,6 +167,45 @@ src/engine/
 - [ ] Game state display — base control timer, units remaining, turn counter
 - [ ] Undo support — undo last action within current turn (leveraging immutable state)
 - [ ] Responsive layout — desktop browsers minimum; tablet-friendly stretch goal
+
+<details>
+<summary>Implementation chunks</summary>
+
+#### Chunk 1: Project Setup + Hex Grid Renderer
+
+1. Add Vite + React 18 to existing monorepo: `src/ui/` directory, `App.tsx`, `main.tsx`, Vite config, updated `package.json` scripts (`dev`, `build:ui`, `preview`), `index.html`
+2. `src/ui/components/HexGrid.tsx` — SVG hex board renderer: hex grid from Board data, coordinate labels (toggle), zone coloring (base, placement, terrain), responsive sizing
+3. `src/ui/components/HexCell.tsx` — Individual hex: terrain indicators, hover highlight, click handler
+4. `src/ui/styles/` — Player colors, grid styling, responsive layout base
+5. Tests: component renders correctly, correct hex count for 2p/4p boards
+
+#### Chunk 2: Unit Rendering + Selection Interaction
+
+1. `src/ui/components/UnitToken.tsx` — Unit on hex: faction color, type label, HP bar, leader marker, dead state
+2. `src/ui/components/UnitInfoPanel.tsx` — Selected unit details: stats, ability state, action availability
+3. Selection flow: click unit → select → show info + valid moves (blue) + valid targets (red) → click to execute → deselect
+4. `src/ui/hooks/useGameState.ts` — React state: hold GameState, action dispatch, selected unit, computed valid moves/targets
+5. Tests: selection flow, valid moves/targets display
+
+#### Chunk 3: Game Flow UI + HUD
+
+1. `src/ui/pages/GamePage.tsx` — Main layout: hex board (center), HUD (sides), turn bar (top)
+2. `src/ui/components/SetupScreen.tsx` — Roll-off, faction selection, army composition builder, ready confirmation
+3. `src/ui/components/PlacementOverlay.tsx` — Placement zones highlighted, click-to-place from roster, alternating 2-at-a-time, hidden opponent composition
+4. `src/ui/components/TurnIndicator.tsx` — Current player, turn number, phase, base control timer
+5. `src/ui/components/EventLog.tsx` — Scrollable event log, color-coded, click to highlight relevant hex
+6. Tests: setup flow completes, placement transitions correctly
+
+#### Chunk 4: Combat UI + Undo + Polish
+
+1. `src/ui/components/CombatOverlay.tsx` — Dice roll display, hit/miss/crit indicator, damage number, HP change
+2. `src/ui/components/AbilityPanel.tsx` — Ability controls, targeting UI, result display
+3. Undo: "Undo last action" button (within current turn), immutable state history stack
+4. Game end screen: winner, win condition, final stats, "Play Again"
+5. Responsive polish: desktop-first, tablet-friendly, minimum mobile layout
+6. Tests: full hot-seat game playable from setup through victory
+
+</details>
 
 **Verification:**
 - Play a full hot-seat game, verify all rules enforced correctly
@@ -146,6 +238,43 @@ src/engine/
 - [ ] Army composition selection — default "recommended" comp per faction
 - [ ] Placement logic — ranged behind melee, leader protected
 - [ ] "Play vs AI" mode in the web UI
+
+<details>
+<summary>Implementation chunks</summary>
+
+#### Chunk 1: AI Framework + Evaluation Heuristics
+
+1. `src/ai/types.ts` — `Bot` interface (stateless: GameState + PlayerId → Action[]), `BotConfig` for difficulty/faction params
+2. `src/ai/evaluate.ts` — Board evaluation heuristics: material advantage (weighted HP), board control, threat assessment, leader safety, base control urgency, unit positioning
+3. `src/ai/placement.ts` — Default army composition per faction, placement heuristics (ranged back, melee front, leader protected)
+4. `src/ai/strategies/generic.ts` — Generic strategy: target selection (prioritize low-HP/high-value/in-base), movement (advance/retreat), combat thresholds, turn sequencing
+5. Tests: evaluation scores are reasonable, placement is legal, generic bot completes games without illegal moves
+
+#### Chunk 2: Faction-Specific Tactics (11 factions)
+
+1. `src/ai/strategies/aztecs.ts` — Priest positioning, Jaguar sacrifice tracking
+2. `src/ai/strategies/bulgars.ts` — Terrain exploitation, Khan Krum anti-terrain positioning
+3. `src/ai/strategies/english.ts` — Arthur upgrade timing, Longbowman crit positioning
+4. `src/ai/strategies/huns.ts` — Placeholder basic mounted tactics
+5. `src/ai/strategies/japanese.ts` — Samurai multi-adjacent engagement, Nobunaga dual-attack
+6. `src/ai/strategies/mongols.ts` — Rush strategy (2-turn win), Kheshig full-movement attacks
+7. `src/ai/strategies/muscovites.ts` — Token placement strategy, Streltsy positioning
+8. `src/ai/strategies/ottomans.ts` — Medic healing priority, Janissary reload management
+9. `src/ai/strategies/romans.ts` — Formation maintenance, Caesar redirect
+10. `src/ai/strategies/vandals.ts` — Lone-wolf positioning (Raider/Genseric solo bonuses)
+11. `src/ai/strategies/vikings.ts` — Eric double-attack targeting, Berserker aggression
+12. `src/ai/strategies/index.ts` — Strategy registry: faction → strategy mapping
+13. Tests per faction: bot plays 10 games without errors, verifies ability usage
+
+#### Chunk 3: Bot Runner + UI Integration
+
+1. `src/ai/bot-runner.ts` — Bot execution: generate + validate + apply actions, configurable think delay, invalid action handling
+2. `src/ai/difficulty.ts` — Difficulty wrapper: Medium = faction strategy, Easy/Hard = stubs for Phase 8
+3. UI integration: "Play vs AI" mode in setup, AI auto-executes turns with delay, visual feedback during AI turn
+4. Bot vs Bot CLI: `npm run bot-match -- --faction1 romans --faction2 vikings --seed 42` (groundwork for Phase 6)
+5. Tests: all 11 bots complete full games, varied outcomes in bot-vs-bot, "Play vs AI" e2e
+
+</details>
 
 **Verification:**
 - Each bot completes full games without errors or illegal moves

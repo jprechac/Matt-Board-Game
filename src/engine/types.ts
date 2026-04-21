@@ -97,6 +97,7 @@ export interface Unit {
   readonly position: CubeCoord;
   readonly currentHp: number;
   readonly maxHp: number;
+  readonly movement: number;
   readonly hasMovedThisTurn: boolean;
   readonly hasAttackedThisTurn: boolean;
   readonly hasUsedAbilityThisTurn: boolean;
