@@ -111,7 +111,7 @@ Basic units are shared across factions. They are simple units with no unique cap
 | Name | HP | Movement | Range | Damage | To Hit | Special Ability |
 | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
 | Melee | 5 | 2 | 1 | 2 | 4+ | None | 
-| Ranged | 4 | 2 | 4 | 1 | 5+ (7+) | Can only move 1 tile prior to attacking.[^#4] |
+| Ranged | 4 | 2 | 4 | 1 | 5+ (7+) | Can only move 1 tile on a turn where it attacks (before or after the attack). |
 
 ### Faction-Specific Units
 
@@ -155,6 +155,5 @@ Each faction has their own
 
 <!-- Footnotes -->
 ### Footnotes
-[^#4]: Clarification: Based on this rule, Basic Ranged units can only ever move 1 tile on a turn where they Attack, regardless of whether that movement is before or after the attack. Is this correct? [#4](https://github.com/jprechac/Matt-Board-Game/issues/4)
 [^#5]: Based on initial playtesting, is the 3-5-1 composition going to remain? [#5](https://github.com/jprechac/Matt-Board-Game/issues/5)
 [^#6]: Need clarity on how Terrain works.[#6](https://github.com/jprechac/Matt-Board-Game/issues/6)

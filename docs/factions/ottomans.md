@@ -12,7 +12,4 @@
 | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
 | Suleiman the Magnificent | 10 | 4 | 1 | 3 | 3+ | Siege units that start their turn within 3 hexes of Suleiman gain +1 movement for that turn. |
 | Medic | 5 | 3 | 1 | 0 | 4+ to heal 1,<br>6+ to heal 2 | Heals allied units rather than attacking enemy units. |
-| Janissary | 6 | 3/2[^#1] | 4 | 2 (3 on 8+) | 4+ (4+ within 2 hexes) | Must skip turn to reload. |
-
-<!-- Footnotes -->
-[^#1]: Question for Matt: What does `3/2` mean? [#1](https://github.com/jprechac/Matt-Board-Game/issues/1)
+| Janissary | 6 | 3 (2 while reloading) | 4 | 2 (3 on 8+) | 4+ (4+ within 2 hexes) | Must skip turn to reload. Movement is reduced to 2 on reload turns. |

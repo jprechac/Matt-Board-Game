@@ -24,6 +24,10 @@ The following metrics should be calculated and evaluated for every balancing tes
 
 #### Army Composition
 
+The standard army composition is 3 Basic / 5 Specialty / 1 Leader. Future simulations should also test alternate compositions to evaluate whether this ratio is optimal ([#5](https://github.com/jprechac/Matt-Board-Game/issues/5)):
+- **6 Specialty variant**: 2 Basic / 6 Specialty / 1 Leader
+- **4 Basic variant**: 4 Basic / 4 Specialty / 1 Leader
+
 ### Unit & Faction Balance
 
 
