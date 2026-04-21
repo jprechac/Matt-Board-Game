@@ -33,7 +33,7 @@
 
 ### Phase 1: Core Game Engine
 
-> **Status:** ✅ Complete
+> **Status:** ✅ Complete<br>
 > **Depends on:** Nothing (this is the foundation)
 
 **Goal:** Implement all game rules as a pure, testable, headless TypeScript library.
@@ -159,7 +159,7 @@ src/engine/
 
 ### Phase 3: Web UI — Manual Playtesting
 
-> **Status:** Not started
+> **Status:** Not started<br>
 > **Depends on:** Phase 1, Phase 2
 
 **Goal:** Playable hot-seat (same screen, two players alternate) web app with hex grid visualization.
@@ -221,7 +221,7 @@ src/engine/
 
 ### Phase 4: Basic AI Bots (Medium Difficulty)
 
-> **Status:** Not started
+> **Status:** Not started<br>
 > **Depends on:** Phase 1, Phase 2; UI integration depends on Phase 3 (can develop in parallel)
 
 **Goal:** Create a "Medium" difficulty AI for each faction so a single player can playtest vs computer.
@@ -291,7 +291,7 @@ src/engine/
 
 ### Phase 5: Game Logging & Statistics Tracking
 
-> **Status:** Not started
+> **Status:** Not started<br>
 > **Depends on:** Phase 2, Phase 4
 
 **Goal:** Structured data collection from games for balance analysis.
@@ -310,7 +310,7 @@ src/engine/
 
 ### Phase 6: AI vs AI Simulation Runner
 
-> **Status:** Not started
+> **Status:** Not started<br>
 > **Depends on:** Phase 4, Phase 5
 
 **Goal:** Headless CLI tool that runs thousands of games and produces balance reports.
@@ -336,7 +336,7 @@ src/engine/
 
 ### Phase 7: Balance Analysis Dashboard
 
-> **Status:** Not started
+> **Status:** Not started<br>
 > **Depends on:** Phase 3, Phase 6
 
 **Goal:** Visual dashboard for interpreting simulation results.
@@ -354,7 +354,7 @@ src/engine/
 
 ### Phase 8: Advanced AI — Easy / Medium / Hard
 
-> **Status:** Not started
+> **Status:** Not started<br>
 > **Depends on:** Phase 4, Phase 6
 
 **Goal:** Three difficulty tiers per faction for varied playtesting and nuanced simulations.
@@ -374,7 +374,7 @@ src/engine/
 
 ### Phase 9 (Stretch): Online Multiplayer
 
-> **Status:** Not started
+> **Status:** Not started<br>
 > **Depends on:** Phase 1, Phase 3
 
 **Goal:** Remote play over the network.
