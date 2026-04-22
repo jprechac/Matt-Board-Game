@@ -116,6 +116,8 @@ src/engine/
 - [ ] **4-player game flow** — Board zones are correct (2v2 teams share top/bottom bases on wider board), but game.ts setup/placement logic doesn't yet handle 4-player team mechanics (team roll-off, A→C→B→D placement order, team-based win conditions).
 - [ ] **Terrain system** — Fully stubbed; design doc says "Jordan note: I don't know how Terrain works." Blocked on rules finalization.
 - [ ] **Test coverage gaps** — `getReachableHexes()` not directly tested; combat tests use seed-hunting pattern; ~12 abilities lack dedicated tests; validation.ts gameplay validators undertested.
+- [x] ~~**Missing getLegalActions API**~~ — Fixed: `getUnitActions()` + `getAllLegalActions()` added in `src/engine/actions.ts`. Needed by Phase 3 UI and Phase 4 AI.
+- [x] ~~**Missing baseControlChanged + empty serialization tests**~~ — Fixed: both test gaps from audit covered in `tests/engine/actions.test.ts`.
 
 ---
 
