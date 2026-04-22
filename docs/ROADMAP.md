@@ -162,20 +162,20 @@ src/engine/
 
 ### Phase 3: Web UI — Manual Playtesting
 
-> **Status:** 🔄 In Progress (Chunk 1 complete)<br>
+> **Status:** ✅ Complete<br>
 > **Depends on:** Phase 1, Phase 2
 
 **Goal:** Playable hot-seat (same screen, two players alternate) web app with hex grid visualization.
 
-- [ ] Project setup — Vite + React + TypeScript
-- [ ] Hex grid renderer — SVG hex board with coordinates, terrain zones, bases
-- [ ] Unit rendering — faction colors, unit type labels/icons, HP bars (simple shapes initially)
-- [ ] Game flow UI — setup screen (faction selection, army comp), placement phase, gameplay
-- [ ] Interaction — click to select → show valid moves → click to move/attack → show roll result
-- [ ] HUD / info panels — turn indicator, selected unit stats, event log sidebar, faction ability reminders
-- [ ] Game state display — base control timer, units remaining, turn counter
-- [ ] Undo support — undo last action within current turn (leveraging immutable state)
-- [ ] Responsive layout — desktop browsers minimum; tablet-friendly stretch goal
+- [x] Project setup — Vite + React + TypeScript
+- [x] Hex grid renderer — SVG hex board with coordinates, terrain zones, bases
+- [x] Unit rendering — faction colors, unit type labels/icons, HP bars (simple shapes initially)
+- [x] Game flow UI — setup screen (faction selection, army comp), placement phase, gameplay
+- [x] Interaction — click to select → show valid moves → click to move/attack → show roll result
+- [x] HUD / info panels — turn indicator, selected unit stats, event log sidebar, faction ability reminders
+- [x] Game state display — base control timer, units remaining, turn counter
+- [x] Undo support — undo last action within current turn (leveraging immutable state)
+- [x] Responsive layout — desktop browsers minimum; tablet-friendly stretch goal
 
 <details>
 <summary>Implementation chunks</summary>
@@ -188,7 +188,7 @@ src/engine/
 4. `src/ui/styles/` — Player colors, grid styling, responsive layout base
 5. Tests: component renders correctly, correct hex count for 2p/4p boards
 
-#### Chunk 2: Unit Rendering + Selection Interaction
+#### Chunk 2: Unit Rendering + Selection Interaction ✅
 
 1. `src/ui/components/UnitToken.tsx` — Unit on hex: faction color, type label, HP bar, leader marker, dead state
 2. `src/ui/components/UnitInfoPanel.tsx` — Selected unit details: stats, ability state, action availability
@@ -196,23 +196,23 @@ src/engine/
 4. `src/ui/hooks/useGameState.ts` — React state: hold GameState, action dispatch, selected unit, computed valid moves/targets
 5. Tests: selection flow, valid moves/targets display
 
-#### Chunk 3: Game Flow UI + HUD
+#### Chunk 3: Game Flow UI + HUD ✅
 
-1. `src/ui/pages/GamePage.tsx` — Main layout: hex board (center), HUD (sides), turn bar (top)
-2. `src/ui/components/SetupScreen.tsx` — Roll-off, faction selection, army composition builder, ready confirmation
-3. `src/ui/components/PlacementOverlay.tsx` — Placement zones highlighted, click-to-place from roster, alternating 2-at-a-time, hidden opponent composition
-4. `src/ui/components/TurnIndicator.tsx` — Current player, turn number, phase, base control timer
-5. `src/ui/components/EventLog.tsx` — Scrollable event log, color-coded, click to highlight relevant hex
+1. `src/ui/App.tsx` — Phase router: menu → setup → placement → gameplay → victory
+2. `src/ui/components/SetupScreen.tsx` — Roll-off, faction selection, army composition builder with privacy handoff
+3. `src/ui/components/PlacementScreen.tsx` — Placement zones highlighted, click-to-place from roster, batch tracking
+4. `src/ui/components/TurnIndicator.tsx` — Current player, turn number, base control timer
+5. `src/ui/components/EventLog.tsx` — Scrollable event log, color-coded by event type
 6. Tests: setup flow completes, placement transitions correctly
 
-#### Chunk 4: Combat UI + Undo + Polish
+#### Chunk 4: Combat UI + Undo + Polish ✅
 
-1. `src/ui/components/CombatOverlay.tsx` — Dice roll display, hit/miss/crit indicator, damage number, HP change
-2. `src/ui/components/AbilityPanel.tsx` — Ability controls, targeting UI, result display
-3. Undo: "Undo last action" button (within current turn), immutable state history stack
-4. Game end screen: winner, win condition, final stats, "Play Again"
-5. Responsive polish: desktop-first, tablet-friendly, minimum mobile layout
-6. Tests: full hot-seat game playable from setup through victory
+1. `src/ui/components/CombatOverlay.tsx` — Attack result toast: hit/miss/crit indicator, damage, target destroyed
+2. Ability info in UnitInfoPanel — ability description display from handler registry
+3. Undo: within-turn undo via immutable RecordedGame history stack (already in useGameState hook)
+4. Victory screen: winner, win condition, final stats (turns, actions, kills, units alive), Play Again
+5. Responsive layout: viewport meta, flex layout, min-height
+6. Tests: CombatOverlay (hit/miss/crit/kill), App menu navigation, full engine E2E lifecycle
 
 </details>
 

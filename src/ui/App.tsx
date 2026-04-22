@@ -9,6 +9,7 @@ import { EventLog } from './components/EventLog.js';
 import { SetupScreen } from './components/SetupScreen.js';
 import { PlacementScreen } from './components/PlacementScreen.js';
 import { useGameState } from './hooks/useGameState.js';
+import { CombatOverlay } from './components/CombatOverlay.js';
 import { createDevGameplayState } from './devSandbox.js';
 
 type AppMode = 'newGame' | 'devSandbox';
@@ -74,7 +75,7 @@ function GameApp({ config, initialState, onExit }: GameAppProps) {
 
   // Victory phase
   if (game.gameState.winner) {
-    return <VictoryOverlay gameState={game.gameState} onExit={onExit} />;
+    return <VictoryOverlay gameState={game.gameState} recording={game.recording} onExit={onExit} />;
   }
 
   // Gameplay phase
@@ -185,6 +186,8 @@ function GameplayScreen({
         </div>
       )}
 
+      <CombatOverlay events={game.lastEvents} />
+
       <div style={{ display: 'flex', gap: '12px' }}>
         <div style={{ flex: 1 }}>
           <HexGrid
@@ -220,7 +223,20 @@ function GameplayScreen({
 
 // ========== Victory ==========
 
-function VictoryOverlay({ gameState, onExit }: { gameState: import('../engine/types.js').GameState; onExit: () => void }) {
+function VictoryOverlay({ gameState, recording, onExit }: {
+  gameState: import('../engine/types.js').GameState;
+  recording: import('../engine/recorder.js').GameRecording;
+  onExit: () => void;
+}) {
+  const aliveByPlayer: Record<string, number> = {};
+  for (const u of gameState.units) {
+    if (u.currentHp > 0) {
+      aliveByPlayer[u.playerId] = (aliveByPlayer[u.playerId] ?? 0) + 1;
+    }
+  }
+  const totalActions = recording.actions.length;
+  const killCount = recording.events.filter(e => e.type === 'unitKilled').length;
+
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -228,14 +244,34 @@ function VictoryOverlay({ gameState, onExit }: { gameState: import('../engine/ty
     }}>
       <div style={{
         padding: '48px 64px', borderRadius: '16px', background: '#1e293b',
-        textAlign: 'center', border: '2px solid #fbbf24',
+        textAlign: 'center', border: '2px solid #fbbf24', minWidth: '350px',
       }}>
         <h2 style={{ fontSize: '32px', marginBottom: '12px' }}>🏆 {gameState.winner} wins!</h2>
         <p style={{ color: '#94a3b8', marginBottom: '24px', fontSize: '16px' }}>
           Victory by {gameState.winCondition}
         </p>
+
+        <div style={{
+          display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px',
+          marginBottom: '24px', fontSize: '13px', textAlign: 'left',
+          padding: '12px', background: '#0f172a', borderRadius: '8px',
+        }}>
+          <span style={{ color: '#94a3b8' }}>Turns played:</span>
+          <span>{gameState.turnNumber}</span>
+          <span style={{ color: '#94a3b8' }}>Total actions:</span>
+          <span>{totalActions}</span>
+          <span style={{ color: '#94a3b8' }}>Units killed:</span>
+          <span>{killCount}</span>
+          {Object.entries(aliveByPlayer).map(([pid, count]) => (
+            <React.Fragment key={pid}>
+              <span style={{ color: '#94a3b8' }}>{pid} alive:</span>
+              <span>{count}</span>
+            </React.Fragment>
+          ))}
+        </div>
+
         <button onClick={onExit} style={menuBtn('#2563eb')}>
-          Back to Menu
+          Play Again
         </button>
       </div>
     </div>

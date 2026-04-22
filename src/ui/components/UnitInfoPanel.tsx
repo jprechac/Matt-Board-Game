@@ -2,6 +2,7 @@ import React from 'react';
 import type { Unit } from '../../engine/types.js';
 import type { UnitActions } from '../../engine/actions.js';
 import { getUnitDef } from '../../engine/data/factions/index.js';
+import { getAbility } from '../../engine/abilities/index.js';
 import { getPlayerColors } from '../styles/colors.js';
 
 export interface UnitInfoPanelProps {
@@ -79,6 +80,18 @@ export function UnitInfoPanel({ unit, actions, onEndUnitTurn }: UnitInfoPanelPro
           <span style={{ color: '#3b82f6' }}>Active</span>
         )}
       </div>
+
+      {/* Ability */}
+      {def?.abilityId && (() => {
+        const ability = getAbility(def.abilityId);
+        return ability ? (
+          <div style={{ marginBottom: '8px' }}>
+            <div style={{ color: '#a78bfa', fontSize: '11px', marginBottom: '4px' }}>Ability</div>
+            <div style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '2px' }}>{ability.id.replace(/_/g, ' ')}</div>
+            <div style={{ fontSize: '11px', color: '#94a3b8', lineHeight: '1.4' }}>{ability.description}</div>
+          </div>
+        ) : null;
+      })()}
 
       {/* Actions */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
