@@ -1,46 +1,121 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import type { HexCell, Unit } from '../engine/types.js';
+import type { GameConfig } from '../engine/game.js';
 import { hexKey } from '../engine/hex.js';
 import { HexGrid } from './components/HexGrid.js';
 import { UnitInfoPanel } from './components/UnitInfoPanel.js';
+import { TurnIndicator } from './components/TurnIndicator.js';
+import { EventLog } from './components/EventLog.js';
+import { SetupScreen } from './components/SetupScreen.js';
+import { PlacementScreen } from './components/PlacementScreen.js';
 import { useGameState } from './hooks/useGameState.js';
 import { createDevGameplayState } from './devSandbox.js';
 
-const initialState = createDevGameplayState(42);
+type AppMode = 'newGame' | 'devSandbox';
+
+const DEFAULT_CONFIG: GameConfig = { boardSize: '2p', playerIds: ['player1', 'player2'], seed: Date.now() };
 
 export function App() {
-  const [showCoords, setShowCoords] = useState(false);
-  const game = useGameState(initialState);
+  const [mode, setMode] = useState<AppMode | null>(null);
+  const [config, setConfig] = useState<GameConfig>(DEFAULT_CONFIG);
 
+  if (!mode) {
+    return (
+      <div style={{ padding: '48px', textAlign: 'center', maxWidth: '500px', margin: '0 auto' }}>
+        <h1 style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '32px' }}>Matt Board Game</h1>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <button onClick={() => setMode('newGame')} style={menuBtn('#2563eb')}>
+            New Game
+            <span style={{ display: 'block', fontSize: '12px', color: '#93c5fd', marginTop: '4px' }}>
+              Full setup → placement → gameplay
+            </span>
+          </button>
+          <button onClick={() => setMode('devSandbox')} style={menuBtn('#475569')}>
+            Dev Sandbox
+            <span style={{ display: 'block', fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>
+              Skip to gameplay (Romans vs Vikings)
+            </span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (mode === 'devSandbox') {
+    return <GameApp initialState={createDevGameplayState(42)} onExit={() => setMode(null)} />;
+  }
+
+  return <GameApp config={config} onExit={() => setMode(null)} />;
+}
+
+// ========== GameApp ==========
+
+interface GameAppProps {
+  config?: GameConfig;
+  initialState?: import('../engine/types.js').GameState;
+  onExit: () => void;
+}
+
+function GameApp({ config, initialState, onExit }: GameAppProps) {
+  const game = useGameState(initialState ?? config!);
+  const [showCoords, setShowCoords] = useState(false);
+
+  const phase = game.gameState.phase;
+
+  // Setup phase
+  if (phase === 'setup') {
+    return <SetupScreen gameState={game.gameState} dispatch={game.dispatch} lastError={game.lastError} />;
+  }
+
+  // Placement phase
+  if (phase === 'placement') {
+    return <PlacementScreen gameState={game.gameState} dispatch={game.dispatch} lastError={game.lastError} />;
+  }
+
+  // Victory phase
+  if (game.gameState.winner) {
+    return <VictoryOverlay gameState={game.gameState} onExit={onExit} />;
+  }
+
+  // Gameplay phase
+  return <GameplayScreen game={game} showCoords={showCoords} setShowCoords={setShowCoords} onExit={onExit} />;
+}
+
+// ========== Gameplay Screen ==========
+
+function GameplayScreen({
+  game,
+  showCoords,
+  setShowCoords,
+  onExit,
+}: {
+  game: ReturnType<typeof useGameState>;
+  showCoords: boolean;
+  setShowCoords: (v: boolean) => void;
+  onExit: () => void;
+}) {
   const handleCellClick = useCallback((cell: HexCell) => {
     if (game.gameState.phase !== 'gameplay') return;
-
     const key = hexKey(cell.coord);
 
-    // If a unit is selected and this is a valid move target, move there
     if (game.selectedUnitId) {
       const isValidMove = game.unitActions.moves.some(m => hexKey(m) === key);
       if (isValidMove) {
         game.dispatch({ type: 'move', unitId: game.selectedUnitId, to: cell.coord });
         return;
       }
-
-      // If clicking a valid attack target hex (but clicked the cell, not the unit token)
       const target = game.unitActions.attackTargets.find(t => hexKey(t.position) === key);
       if (target) {
         game.dispatch({ type: 'attack', unitId: game.selectedUnitId, targetId: target.id });
         return;
       }
     }
-
-    // Clicking empty non-highlighted hex deselects
     game.deselectUnit();
   }, [game]);
 
   const handleUnitClick = useCallback((unit: Unit) => {
     if (game.gameState.phase !== 'gameplay') return;
 
-    // If we have a selected unit and this is an attack target, attack
     if (game.selectedUnitId && game.selectedUnitId !== unit.id) {
       const isTarget = game.unitActions.attackTargets.some(t => t.id === unit.id);
       if (isTarget) {
@@ -49,7 +124,6 @@ export function App() {
       }
     }
 
-    // Select/deselect own unit
     if (unit.playerId === game.gameState.currentPlayerId) {
       if (game.selectedUnitId === unit.id) {
         game.deselectUnit();
@@ -59,79 +133,38 @@ export function App() {
     }
   }, [game]);
 
-  const handleEndUnitTurn = useCallback(() => {
-    if (game.selectedUnitId) {
-      game.dispatch({ type: 'endUnitTurn', unitId: game.selectedUnitId });
-    }
-  }, [game]);
-
-  const handleEndTurn = useCallback(() => {
-    game.dispatch({ type: 'endTurn' });
-  }, [game]);
-
-  const currentPlayer = game.gameState.currentPlayerId;
-  const turnNum = game.gameState.turnNumber;
-
   return (
     <div style={{ padding: '16px', width: '100%', maxWidth: '1400px' }}>
-      {/* Header bar */}
-      <header style={{
-        marginBottom: '12px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '16px',
-        flexWrap: 'wrap',
-      }}>
-        <h1 style={{ fontSize: '22px', fontWeight: 'bold' }}>Matt Board Game</h1>
+      <header style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+        <h1 style={{ fontSize: '20px', fontWeight: 'bold', cursor: 'pointer' }} onClick={onExit}>
+          ← Matt Board Game
+        </h1>
+        <TurnIndicator gameState={game.gameState} />
 
-        <div style={{
-          padding: '4px 12px',
-          borderRadius: '4px',
-          background: currentPlayer === 'player1' ? '#2563eb' : '#dc2626',
-          fontSize: '13px',
-          fontWeight: 'bold',
-        }}>
-          Turn {turnNum} — {currentPlayer}
-        </div>
-
-        <div style={{ fontSize: '13px', color: '#94a3b8' }}>
-          Phase: {game.gameState.phase}
-        </div>
-
-        <label style={{ fontSize: '13px', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <input
-            type="checkbox"
-            checked={showCoords}
-            onChange={e => setShowCoords(e.target.checked)}
-          />
+        <label style={{ fontSize: '12px', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <input type="checkbox" checked={showCoords} onChange={e => setShowCoords(e.target.checked)} />
           Coords
         </label>
 
         <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
           {game.canUndo && (
-            <button
-              onClick={() => game.undo()}
-              style={{
-                padding: '4px 12px', borderRadius: '4px', border: '1px solid #475569',
-                background: '#334155', color: '#fff', cursor: 'pointer', fontSize: '12px',
-              }}
-            >
-              Undo
-            </button>
+            <button onClick={() => game.undo()} style={headerBtn}>Undo</button>
           )}
           <button
-            onClick={handleEndTurn}
-            style={{
-              padding: '4px 12px', borderRadius: '4px', border: 'none',
-              background: '#475569', color: '#fff', cursor: 'pointer', fontSize: '12px',
+            onClick={() => {
+              if (game.selectedUnitId) game.dispatch({ type: 'endUnitTurn', unitId: game.selectedUnitId });
             }}
+            disabled={!game.selectedUnitId}
+            style={{ ...headerBtn, opacity: game.selectedUnitId ? 1 : 0.4 }}
           >
+            End Unit Turn
+          </button>
+          <button onClick={() => game.dispatch({ type: 'endTurn' })} style={headerBtn}>
             End Turn
           </button>
         </div>
       </header>
 
-      {/* Error display */}
       {game.lastError && (
         <div style={{
           padding: '6px 12px', marginBottom: '8px', borderRadius: '4px',
@@ -141,7 +174,6 @@ export function App() {
         </div>
       )}
 
-      {/* Last events */}
       {game.lastEvents.length > 0 && (
         <div style={{
           padding: '6px 12px', marginBottom: '8px', borderRadius: '4px',
@@ -153,8 +185,7 @@ export function App() {
         </div>
       )}
 
-      {/* Main content */}
-      <div style={{ display: 'flex', gap: '16px' }}>
+      <div style={{ display: 'flex', gap: '12px' }}>
         <div style={{ flex: 1 }}>
           <HexGrid
             board={game.gameState.board}
@@ -167,30 +198,17 @@ export function App() {
           />
         </div>
 
-        {game.selectedUnit && (
-          <UnitInfoPanel
-            unit={game.selectedUnit}
-            actions={game.unitActions}
-            onEndUnitTurn={handleEndUnitTurn}
-          />
-        )}
-      </div>
-
-      {/* Victory overlay */}
-      {game.gameState.winner && (
-        <div style={{
-          position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(0,0,0,0.7)', zIndex: 10,
-        }}>
-          <div style={{
-            padding: '32px 48px', borderRadius: '12px', background: '#1e293b',
-            textAlign: 'center', border: '2px solid #fbbf24',
-          }}>
-            <h2 style={{ fontSize: '28px', marginBottom: '8px' }}>🏆 {game.gameState.winner} wins!</h2>
-            <p style={{ color: '#94a3b8' }}>by {game.gameState.winCondition}</p>
-          </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {game.selectedUnit && (
+            <UnitInfoPanel
+              unit={game.selectedUnit}
+              actions={game.unitActions}
+              onEndUnitTurn={() => game.dispatch({ type: 'endUnitTurn', unitId: game.selectedUnitId! })}
+            />
+          )}
+          <EventLog events={game.recording.events} />
         </div>
-      )}
+      </div>
 
       <footer style={{ marginTop: '12px', fontSize: '11px', color: '#64748b' }}>
         {game.gameState.units.filter(u => u.currentHp > 0).length} units alive •{' '}
@@ -199,4 +217,43 @@ export function App() {
     </div>
   );
 }
+
+// ========== Victory ==========
+
+function VictoryOverlay({ gameState, onExit }: { gameState: import('../engine/types.js').GameState; onExit: () => void }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      minHeight: '80vh',
+    }}>
+      <div style={{
+        padding: '48px 64px', borderRadius: '16px', background: '#1e293b',
+        textAlign: 'center', border: '2px solid #fbbf24',
+      }}>
+        <h2 style={{ fontSize: '32px', marginBottom: '12px' }}>🏆 {gameState.winner} wins!</h2>
+        <p style={{ color: '#94a3b8', marginBottom: '24px', fontSize: '16px' }}>
+          Victory by {gameState.winCondition}
+        </p>
+        <button onClick={onExit} style={menuBtn('#2563eb')}>
+          Back to Menu
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ========== Styles ==========
+
+function menuBtn(bg: string): React.CSSProperties {
+  return {
+    padding: '16px 24px', borderRadius: '8px', border: 'none',
+    background: bg, color: '#fff', cursor: 'pointer',
+    fontSize: '16px', fontWeight: 'bold', width: '100%',
+  };
+}
+
+const headerBtn: React.CSSProperties = {
+  padding: '4px 12px', borderRadius: '4px', border: '1px solid #475569',
+  background: '#334155', color: '#fff', cursor: 'pointer', fontSize: '12px',
+};
 

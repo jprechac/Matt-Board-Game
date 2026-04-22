@@ -2,10 +2,14 @@ import { useCallback, useMemo, useReducer } from 'react';
 import type { GameState, Action, Unit, CubeCoord } from '../../engine/types.js';
 import type { GameConfig } from '../../engine/game.js';
 import type { GameEvent } from '../../engine/events.js';
-import { createGame, applyActionDetailed } from '../../engine/game.js';
 import { validateAction } from '../../engine/validation.js';
 import { getUnitActions } from '../../engine/actions.js';
 import { hexKey } from '../../engine/hex.js';
+import {
+  createRecordedGame, applyRecordedAction, getEventsByType,
+} from '../../engine/recorder.js';
+import type { RecordedGame } from '../../engine/recorder.js';
+import { registerAllAbilities } from '../../engine/abilities/index.js';
 
 // ========== Types ==========
 
@@ -16,11 +20,11 @@ export interface DispatchResult {
 }
 
 interface UIState {
-  readonly gameState: GameState;
+  readonly recorded: RecordedGame;
   readonly selectedUnitId: string | null;
   readonly lastEvents: readonly GameEvent[];
   readonly lastError: string | null;
-  readonly stateHistory: readonly GameState[];
+  readonly history: readonly RecordedGame[];
 }
 
 type UIAction =
@@ -34,17 +38,21 @@ type UIAction =
 function reducer(state: UIState, uiAction: UIAction): UIState {
   switch (uiAction.type) {
     case 'dispatch': {
-      const validation = validateAction(state.gameState, uiAction.action);
+      const gs = state.recorded.state;
+      const validation = validateAction(gs, uiAction.action);
       if (!validation.valid) {
         return { ...state, lastError: validation.reason ?? 'Invalid action', lastEvents: [] };
       }
 
-      const { state: nextState, events } = applyActionDetailed(state.gameState, uiAction.action);
+      const nextRecorded = applyRecordedAction(state.recorded, uiAction.action);
+      const nextState = nextRecorded.state;
+
+      // Compute events from this action
+      const prevEventCount = state.recorded.recording.events.length;
+      const newEvents = nextRecorded.recording.events.slice(prevEventCount);
 
       // Auto-select active unit or clear selection
       let selectedUnitId: string | null = nextState.activeUnitId ?? null;
-
-      // If unit died or game ended, clear selection
       if (selectedUnitId) {
         const unit = nextState.units.find(u => u.id === selectedUnitId);
         if (!unit || unit.currentHp <= 0) selectedUnitId = null;
@@ -52,43 +60,40 @@ function reducer(state: UIState, uiAction: UIAction): UIState {
       if (nextState.winner) selectedUnitId = null;
 
       return {
-        gameState: nextState,
+        recorded: nextRecorded,
         selectedUnitId,
-        lastEvents: events,
+        lastEvents: newEvents,
         lastError: null,
-        stateHistory: [...state.stateHistory, state.gameState],
+        history: [...state.history, state.recorded],
       };
     }
 
     case 'selectUnit': {
-      const gs = state.gameState;
+      const gs = state.recorded.state;
       if (gs.phase !== 'gameplay') return state;
 
       const unit = gs.units.find(u => u.id === uiAction.unitId);
       if (!unit || unit.currentHp <= 0) return state;
       if (unit.playerId !== gs.currentPlayerId) return state;
       if (unit.activatedThisTurn) return state;
-
-      // Can't select a different unit while one is active
       if (gs.activeUnitId && gs.activeUnitId !== uiAction.unitId) return state;
 
       return { ...state, selectedUnitId: uiAction.unitId, lastError: null };
     }
 
     case 'deselectUnit':
-      // Can't deselect if engine has an active unit
-      if (state.gameState.activeUnitId) return state;
+      if (state.recorded.state.activeUnitId) return state;
       return { ...state, selectedUnitId: null };
 
     case 'undo': {
-      if (state.stateHistory.length === 0) return state;
-      const prevState = state.stateHistory[state.stateHistory.length - 1];
+      if (state.history.length === 0) return state;
+      const prevRecorded = state.history[state.history.length - 1];
       return {
-        gameState: prevState,
-        selectedUnitId: prevState.activeUnitId ?? null,
+        recorded: prevRecorded,
+        selectedUnitId: prevRecorded.state.activeUnitId ?? null,
         lastEvents: [],
         lastError: null,
-        stateHistory: state.stateHistory.slice(0, -1),
+        history: state.history.slice(0, -1),
       };
     }
 
@@ -99,24 +104,47 @@ function reducer(state: UIState, uiAction: UIAction): UIState {
 
 // ========== Hook ==========
 
-export function useGameState(initialState: GameState) {
+let abilitiesRegistered = false;
+
+export function useGameState(configOrState: GameConfig | GameState) {
+  if (!abilitiesRegistered) {
+    registerAllAbilities();
+    abilitiesRegistered = true;
+  }
+
+  const initialRecorded = useMemo(() => {
+    if ('phase' in configOrState) {
+      // Pre-built GameState (dev sandbox) — wrap in a minimal RecordedGame
+      return {
+        state: configOrState,
+        recording: {
+          config: { boardSize: configOrState.board.size, playerIds: configOrState.players.map(p => p.id), seed: configOrState.rngSeed },
+          initialState: configOrState,
+          actions: [],
+          events: [],
+        },
+      } as RecordedGame;
+    }
+    return createRecordedGame(configOrState);
+  }, []);
+
   const [state, rawDispatch] = useReducer(reducer, {
-    gameState: initialState,
+    recorded: initialRecorded,
     selectedUnitId: null,
     lastEvents: [],
     lastError: null,
-    stateHistory: [],
+    history: [],
   });
 
   const dispatch = useCallback((action: Action): DispatchResult => {
-    const validation = validateAction(state.gameState, action);
+    const validation = validateAction(state.recorded.state, action);
     if (!validation.valid) {
       rawDispatch({ type: 'dispatch', action });
       return { ok: false, reason: validation.reason };
     }
     rawDispatch({ type: 'dispatch', action });
     return { ok: true };
-  }, [state.gameState]);
+  }, [state.recorded.state]);
 
   const selectUnit = useCallback((unitId: string) => {
     rawDispatch({ type: 'selectUnit', unitId });
@@ -130,42 +158,44 @@ export function useGameState(initialState: GameState) {
     rawDispatch({ type: 'undo' });
   }, []);
 
-  // Derived data
+  const gameState = state.recorded.state;
+
   const selectedUnit = useMemo(() => {
     if (!state.selectedUnitId) return null;
-    return state.gameState.units.find(u => u.id === state.selectedUnitId) ?? null;
-  }, [state.gameState.units, state.selectedUnitId]);
+    return gameState.units.find(u => u.id === state.selectedUnitId) ?? null;
+  }, [gameState.units, state.selectedUnitId]);
 
   const unitActions = useMemo(() => {
-    if (!state.selectedUnitId || state.gameState.phase !== 'gameplay') {
+    if (!state.selectedUnitId || gameState.phase !== 'gameplay') {
       return { moves: [] as readonly CubeCoord[], attackTargets: [] as readonly Unit[], canEndUnitTurn: false };
     }
-    return getUnitActions(state.gameState, state.selectedUnitId);
-  }, [state.gameState, state.selectedUnitId]);
+    return getUnitActions(gameState, state.selectedUnitId);
+  }, [gameState, state.selectedUnitId]);
 
   const moveHighlights = useMemo(() => {
     const map = new Map<string, string>();
     if (state.selectedUnitId && selectedUnit) {
-      map.set(hexKey(selectedUnit.position), '#fbbf24'); // gold for selected
+      map.set(hexKey(selectedUnit.position), '#fbbf24');
     }
     for (const coord of unitActions.moves) {
-      map.set(hexKey(coord), 'rgba(59, 130, 246, 0.4)'); // blue for moves
+      map.set(hexKey(coord), 'rgba(59, 130, 246, 0.4)');
     }
     for (const target of unitActions.attackTargets) {
-      map.set(hexKey(target.position), 'rgba(239, 68, 68, 0.4)'); // red for targets
+      map.set(hexKey(target.position), 'rgba(239, 68, 68, 0.4)');
     }
     return map;
   }, [state.selectedUnitId, selectedUnit, unitActions]);
 
   return {
-    gameState: state.gameState,
+    gameState,
+    recording: state.recorded.recording,
     selectedUnitId: state.selectedUnitId,
     selectedUnit,
     unitActions,
     moveHighlights,
     lastEvents: state.lastEvents,
     lastError: state.lastError,
-    canUndo: state.stateHistory.length > 0,
+    canUndo: state.history.length > 0,
     dispatch,
     selectUnit,
     deselectUnit,
