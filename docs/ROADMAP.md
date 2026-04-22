@@ -109,7 +109,7 @@ src/engine/
 - Manually verify unit stats match design docs
 
 **Known Issues:**
-- [ ] **Streltsy defense ability** (`src/engine/abilities/handlers.ts`) — `onDefend` blocks ALL attacks from moved units regardless of attacker range. Per `docs/factions/muscovites.md`, should only block melee (range 1) move-and-attack. Needs range check on attacker's attack profile + test coverage.
+- [x] ~~**Streltsy defense ability**~~ — Fixed: now checks attacker's attack range, only blocks melee (range 1) move-and-attack.
 - [ ] **Vandals Heavy Cavalry** missing ability implementation — design doc says "-1 To Hit penalty if attacking a unit in melee range" but no handler exists and no `abilityId` is assigned in faction data.
 - [ ] **Stub abilities** — `priest_buff`, `upgrade_unit`, `redirect_attack`, `medic_heal`, `siege_movement_buff`, `attila_tbd` are registered but have no real logic (return `{}` or `true`). Will be filled in as terrain and active-ability actions are implemented.
 - [ ] **Ability actions** — `useAbility` action type exists in types but `applyAction` throws "not implemented". Active abilities (as opposed to passive hooks) need a handler dispatch system.
