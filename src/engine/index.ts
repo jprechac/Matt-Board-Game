@@ -16,3 +16,9 @@ export type { ValidationResult } from './validation.js';
 export * from './events.js';
 export { createRecordedGame, applyRecordedAction, getEventsByType } from './recorder.js';
 export type { GameRecording, RecordedGame } from './recorder.js';
+export {
+  createReplay, stepForward, stepBackward, goToAction, goToTurn, goToEvent,
+  getCurrentState, getEventsUpTo, getActionCount, getEventCount, isAtEnd, isAtStart,
+} from './replay.js';
+export type { ReplayState } from './replay.js';
+export { serializeRecording, deserializeRecording, SCHEMA_VERSION } from './serialization.js';

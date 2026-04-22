@@ -121,7 +121,7 @@ src/engine/
 
 ### Phase 2: Game Event & Replay System
 
-> **Status:** In progress (Chunk 1 of 2 ✅)<br>
+> **Status:** ✅ Complete<br>
 > **Depends on:** Phase 1
 
 **Goal:** Record every game event for replay, debugging, logging, and statistics.
@@ -130,8 +130,8 @@ src/engine/
 
 - [x] Event log system — 16 event types defined in `src/engine/events.ts`
 - [x] Game recorder — `src/engine/recorder.ts` + `applyActionDetailed` in game.ts
-- [ ] Replay player — step forward/backward through game states (headless; UI replay comes in Phase 7)
-- [ ] Serialization — JSON export/import for game recordings
+- [x] Replay player — `src/engine/replay.ts` with lazy state caching, action/event/turn navigation
+- [x] Serialization — `src/engine/serialization.ts` with schema versioning, event count verification
 
 <details>
 <summary>Implementation chunks</summary>
@@ -143,7 +143,7 @@ src/engine/
 3. Integrate recorder into `game.ts` — emit events from action execution (move, attack, ability, turn end, win)
 4. Tests: event emission correctness, recorder captures all actions from scripted game
 
-#### Chunk 2: Replay Player + Serialization
+#### Chunk 2: Replay Player + Serialization ✅
 
 1. `src/engine/replay.ts` — Replay player: reconstruct GameState at any point from `GameRecording`, `stepForward()` / `stepBackward()`, `goToTurn(n)`, `goToEvent(index)`; leverages deterministic RNG
 2. `src/engine/serialization.ts` — JSON export/import: `serializeRecording()` / `deserializeRecording()`, schema versioning, import validation
