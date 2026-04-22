@@ -22,3 +22,5 @@ export {
 } from './replay.js';
 export type { ReplayState } from './replay.js';
 export { serializeRecording, deserializeRecording, SCHEMA_VERSION } from './serialization.js';
+export { getUnitActions, getAllLegalActions } from './actions.js';
+export type { UnitActions } from './actions.js';
