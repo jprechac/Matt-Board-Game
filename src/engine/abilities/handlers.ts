@@ -1,5 +1,7 @@
 import type { AbilityHandler } from './types.js';
 import { registerAbility } from './types.js';
+import { getUnitDef } from '../data/factions/index.js';
+import { BASIC_UNITS } from '../data/basic-units.js';
 import { cubeDistance, cubeNeighbors, hexKey } from '../hex.js';
 
 // ========== Basic Units ==========
@@ -158,9 +160,12 @@ const strelstyDefense: AbilityHandler = {
   id: 'streltsy_defense',
   description: 'Can\'t be attacked by 1-range move-and-attack units; can\'t move and attack.',
   onDefend(ctx, attacker) {
-    // If attacker has range 1 and moved this turn, block the attack
-    if (attacker.hasMovedThisTurn) {
-      // We check the attacker's attack range at validation time
+    if (!attacker.hasMovedThisTurn) return {};
+
+    // Only block melee (range 1) attackers who moved this turn
+    const attackerDef = getUnitDef(attacker.factionId, attacker.typeId)
+      ?? BASIC_UNITS.find(u => u.typeId === attacker.typeId);
+    if (attackerDef && attackerDef.attack.range === 1) {
       return { blockAttack: true };
     }
     return {};

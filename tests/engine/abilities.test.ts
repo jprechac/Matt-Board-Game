@@ -299,6 +299,60 @@ describe('cossack_slow', () => {
   });
 });
 
+describe('streltsy_defense', () => {
+  const ability = getAbility('streltsy_defense')!;
+
+  it('blocks melee (range 1) attackers who moved this turn', () => {
+    const pos = offsetToCube(5, 5);
+    const streltsy = makeUnit({
+      id: 'str', position: pos,
+      factionId: 'muscovites', typeId: 'streltsy',
+    });
+    // Basic melee has range 1
+    const meleeAttacker = makeUnit({
+      id: 'atk', position: offsetToCube(5, 6), playerId: 'player2',
+      factionId: 'romans', typeId: 'basic_melee',
+      hasMovedThisTurn: true,
+    });
+
+    const mods = ability.onDefend!(makeCtx(streltsy, [streltsy, meleeAttacker]), meleeAttacker);
+    expect(mods.blockAttack).toBe(true);
+  });
+
+  it('does NOT block ranged attackers who moved this turn', () => {
+    const pos = offsetToCube(5, 5);
+    const streltsy = makeUnit({
+      id: 'str', position: pos,
+      factionId: 'muscovites', typeId: 'streltsy',
+    });
+    // Basic ranged has range 4
+    const rangedAttacker = makeUnit({
+      id: 'atk', position: offsetToCube(5, 8), playerId: 'player2',
+      factionId: 'romans', typeId: 'basic_ranged',
+      hasMovedThisTurn: true,
+    });
+
+    const mods = ability.onDefend!(makeCtx(streltsy, [streltsy, rangedAttacker]), rangedAttacker);
+    expect(mods.blockAttack).toBeUndefined();
+  });
+
+  it('does NOT block melee attackers who did not move', () => {
+    const pos = offsetToCube(5, 5);
+    const streltsy = makeUnit({
+      id: 'str', position: pos,
+      factionId: 'muscovites', typeId: 'streltsy',
+    });
+    const meleeAttacker = makeUnit({
+      id: 'atk', position: offsetToCube(5, 6), playerId: 'player2',
+      factionId: 'romans', typeId: 'basic_melee',
+      hasMovedThisTurn: false,
+    });
+
+    const mods = ability.onDefend!(makeCtx(streltsy, [streltsy, meleeAttacker]), meleeAttacker);
+    expect(mods.blockAttack).toBeUndefined();
+  });
+});
+
 describe('janissary_reload', () => {
   const ability = getAbility('janissary_reload')!;
 
