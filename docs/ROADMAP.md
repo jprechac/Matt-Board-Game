@@ -118,6 +118,7 @@ src/engine/
 - [ ] **Test coverage gaps** — `getReachableHexes()` not directly tested; combat tests use seed-hunting pattern; ~12 abilities lack dedicated tests; validation.ts gameplay validators undertested.
 - [x] ~~**Missing getLegalActions API**~~ — Fixed: `getUnitActions()` + `getAllLegalActions()` added in `src/engine/actions.ts`. Needed by Phase 3 UI and Phase 4 AI.
 - [x] ~~**Missing baseControlChanged + empty serialization tests**~~ — Fixed: both test gaps from audit covered in `tests/engine/actions.test.ts`.
+- [ ] **Board visual polish** (low priority) — Placement zones and bases need more visual distinction beyond color (e.g. patterns, borders, icons). General hex grid aesthetics could be improved.
 
 ---
 
