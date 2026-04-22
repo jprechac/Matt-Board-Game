@@ -57,6 +57,20 @@ describe('faction data completeness', () => {
     expect(getUnitDef('vikings', 'eric_the_red')).toBeDefined();
     expect(getUnitDef('vikings', 'nonexistent')).toBeUndefined();
   });
+
+  it('getUnitDef falls back to basic units for any faction', () => {
+    const melee = getUnitDef('romans', 'basic_melee');
+    expect(melee).toBeDefined();
+    expect(melee!.typeId).toBe('basic_melee');
+    expect(melee!.attack.range).toBe(1);
+
+    const ranged = getUnitDef('vikings', 'basic_ranged');
+    expect(ranged).toBeDefined();
+    expect(ranged!.typeId).toBe('basic_ranged');
+
+    // Faction-specific unit still found first (not shadowed by basic)
+    expect(getUnitDef('vikings', 'eric_the_red')!.typeId).toBe('eric_the_red');
+  });
 });
 
 describe('unit stat validity', () => {

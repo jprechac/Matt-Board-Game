@@ -1,4 +1,5 @@
 import type { FactionDefinition, FactionId, UnitDefinition } from '../../types.js';
+import { BASIC_UNITS } from '../basic-units.js';
 import { AZTECS } from './aztecs.js';
 import { BULGARS } from './bulgars.js';
 import { ENGLISH } from './english.js';
@@ -37,6 +38,9 @@ export function getFaction(id: FactionId): FactionDefinition {
 }
 
 /** Get a unit definition by faction ID and unit type ID */
+/** Look up a unit definition by faction and type. Falls back to basic units
+ *  (basic_melee, basic_ranged) so callers don't need a separate lookup path. */
 export function getUnitDef(factionId: FactionId, unitTypeId: string): UnitDefinition | undefined {
-  return FACTIONS[factionId].units.find(u => u.typeId === unitTypeId);
+  return FACTIONS[factionId].units.find(u => u.typeId === unitTypeId)
+    ?? BASIC_UNITS.find(u => u.typeId === unitTypeId);
 }

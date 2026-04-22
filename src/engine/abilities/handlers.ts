@@ -1,7 +1,6 @@
 import type { AbilityHandler } from './types.js';
 import { registerAbility } from './types.js';
 import { getUnitDef } from '../data/factions/index.js';
-import { BASIC_UNITS } from '../data/basic-units.js';
 import { cubeDistance, cubeNeighbors, hexKey } from '../hex.js';
 
 // ========== Basic Units ==========
@@ -163,8 +162,7 @@ const strelstyDefense: AbilityHandler = {
     if (!attacker.hasMovedThisTurn) return {};
 
     // Only block melee (range 1) attackers who moved this turn
-    const attackerDef = getUnitDef(attacker.factionId, attacker.typeId)
-      ?? BASIC_UNITS.find(u => u.typeId === attacker.typeId);
+    const attackerDef = getUnitDef(attacker.factionId, attacker.typeId);
     if (attackerDef && attackerDef.attack.range === 1) {
       return { blockAttack: true };
     }
