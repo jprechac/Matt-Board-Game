@@ -121,22 +121,22 @@ src/engine/
 
 ### Phase 2: Game Event & Replay System
 
-> **Status:** Not started<br>
+> **Status:** In progress (Chunk 1 of 2 ✅)<br>
 > **Depends on:** Phase 1
 
 **Goal:** Record every game event for replay, debugging, logging, and statistics.
 
 *This phase is early in the roadmap intentionally — without structured event recording from the start, debugging bot behavior, computing statistics, and replaying games requires painful retrofitting later.*
 
-- [ ] Event log system — define event types: `UnitMoved`, `AttackRolled`, `DamageDealt`, `UnitKilled`, `AbilityUsed`, `TurnEnded`, `BaseControlChanged`, `GameWon`, etc.
-- [ ] Game recorder — capture event stream + initial state + RNG seed; any game can be replayed deterministically
+- [x] Event log system — 16 event types defined in `src/engine/events.ts`
+- [x] Game recorder — `src/engine/recorder.ts` + `applyActionDetailed` in game.ts
 - [ ] Replay player — step forward/backward through game states (headless; UI replay comes in Phase 7)
 - [ ] Serialization — JSON export/import for game recordings
 
 <details>
 <summary>Implementation chunks</summary>
 
-#### Chunk 1: Event Types + Game Recorder
+#### Chunk 1: Event Types + Game Recorder ✅
 
 1. `src/engine/events.ts` — Event type definitions: `UnitMoved`, `AttackRolled`, `DamageDealt`, `UnitKilled`, `AbilityUsed`, `HealPerformed`, `TurnStarted`, `TurnEnded`, `UnitTurnEnded`, `BaseControlChanged`, `BaseControlTimerTick`, `GameWon`, `GameStarted`, `UnitPlaced`, `FactionSelected`, `ArmyCompositionSet`; base event interface with `timestamp`, `turnNumber`, `type`, `playerId`
 2. `src/engine/recorder.ts` — Game recorder: captures event stream, stores initial GameState + RNG seed + board config, provides `record(event)` hook, produces `GameRecording` object

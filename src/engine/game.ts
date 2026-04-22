@@ -9,6 +9,7 @@ import {
   DEFAULT_ARMY_LIMITS, BASE_CONTROL_TURNS_TO_WIN,
   MONGOL_BASE_CONTROL_TURNS_TO_WIN,
 } from './types.js';
+import type { GameEvent } from './events.js';
 import { createBoard, getBaseCells } from './board.js';
 import { hexKey } from './hex.js';
 import { SeededRNG } from './rng.js';
@@ -80,9 +81,22 @@ export function createGame(config: GameConfig): GameState {
   };
 }
 
+// ========== Internal Result Type ==========
+
+interface ActionResult {
+  readonly state: GameState;
+  readonly events: GameEvent[];
+}
+
 // ========== Action Dispatch ==========
 
+/** Apply an action and return only the new state (existing public API). */
 export function applyAction(state: GameState, action: Action): GameState {
+  return applyActionDetailed(state, action).state;
+}
+
+/** Apply an action and return both the new state and emitted events. */
+export function applyActionDetailed(state: GameState, action: Action): ActionResult {
   switch (action.type) {
     case 'choosePriority':
       return applyChoosePriority(state, action);
@@ -113,7 +127,7 @@ export function applyAction(state: GameState, action: Action): GameState {
 
 // ========== Setup Phase ==========
 
-function applyChoosePriority(state: GameState, action: ChoosePriorityAction): GameState {
+function applyChoosePriority(state: GameState, action: ChoosePriorityAction): ActionResult {
   const setup = requireSetup(state, 'choosePriority');
   if (action.playerId !== setup.rollWinner) {
     throw new Error(`Only the roll winner (${setup.rollWinner}) can choose priority`);
@@ -134,7 +148,7 @@ function applyChoosePriority(state: GameState, action: ChoosePriorityAction): Ga
     factionSelectionOrder = [...otherPlayers, action.playerId];
   }
 
-  return {
+  const newState: GameState = {
     ...state,
     setupState: {
       ...setup,
@@ -145,9 +159,19 @@ function applyChoosePriority(state: GameState, action: ChoosePriorityAction): Ga
     },
     currentPlayerId: factionSelectionOrder[0],
   };
+
+  return {
+    state: newState,
+    events: [{
+      type: 'priorityChosen',
+      turnNumber: 0,
+      playerId: action.playerId,
+      choice: action.choice,
+    }],
+  };
 }
 
-function applySelectFaction(state: GameState, action: SelectFactionAction): GameState {
+function applySelectFaction(state: GameState, action: SelectFactionAction): ActionResult {
   const setup = requireSetup(state, 'factionSelection');
   const expectedPlayer = setup.factionSelectionOrder[setup.currentPlayerIndex];
   if (action.playerId !== expectedPlayer) {
@@ -170,7 +194,7 @@ function applySelectFaction(state: GameState, action: SelectFactionAction): Game
   const nextIndex = setup.currentPlayerIndex + 1;
   const allSelected = nextIndex >= setup.factionSelectionOrder.length;
 
-  return {
+  const newState: GameState = {
     ...state,
     players: updatedPlayers,
     setupState: {
@@ -182,9 +206,19 @@ function applySelectFaction(state: GameState, action: SelectFactionAction): Game
       ? setup.factionSelectionOrder[0] // Any player can submit army comp
       : setup.factionSelectionOrder[nextIndex],
   };
+
+  return {
+    state: newState,
+    events: [{
+      type: 'factionSelected',
+      turnNumber: 0,
+      playerId: action.playerId,
+      factionId: action.factionId,
+    }],
+  };
 }
 
-function applySetArmyComposition(state: GameState, action: SetArmyCompositionAction): GameState {
+function applySetArmyComposition(state: GameState, action: SetArmyCompositionAction): ActionResult {
   const setup = requireSetup(state, 'armyComposition');
 
   // Check this player hasn't already submitted
@@ -204,6 +238,13 @@ function applySetArmyComposition(state: GameState, action: SetArmyCompositionAct
     p.id === action.playerId ? { ...p, armyComposition: action.composition } : p,
   );
 
+  const events: GameEvent[] = [{
+    type: 'armyCompositionSet',
+    turnNumber: 0,
+    playerId: action.playerId,
+    composition: action.composition,
+  }];
+
   const allSubmitted = updatedPlayers.every(p => p.armyComposition);
 
   if (allSubmitted) {
@@ -214,31 +255,37 @@ function applySetArmyComposition(state: GameState, action: SetArmyCompositionAct
     }
 
     return {
-      ...state,
-      players: updatedPlayers,
-      setupState: {
-        ...setup,
-        currentStep: 'unitPlacement',
-        currentPlayerIndex: 0,
-        placementCount: 0,
-        batchCount: 0,
-        unplacedRoster,
+      state: {
+        ...state,
+        players: updatedPlayers,
+        setupState: {
+          ...setup,
+          currentStep: 'unitPlacement',
+          currentPlayerIndex: 0,
+          placementCount: 0,
+          batchCount: 0,
+          unplacedRoster,
+        },
+        phase: 'placement',
+        currentPlayerId: setup.moveOrder[0], // Player who moves first places first
       },
-      phase: 'placement',
-      currentPlayerId: setup.moveOrder[0], // Player who moves first places first
+      events,
     };
   }
 
   return {
-    ...state,
-    players: updatedPlayers,
-    setupState: setup,
+    state: {
+      ...state,
+      players: updatedPlayers,
+      setupState: setup,
+    },
+    events,
   };
 }
 
 // ========== Placement Phase ==========
 
-function applyPlaceUnit(state: GameState, action: PlaceUnitAction): GameState {
+function applyPlaceUnit(state: GameState, action: PlaceUnitAction): ActionResult {
   if (state.phase !== 'placement') {
     throw new Error('Can only place units during placement phase');
   }
@@ -293,25 +340,43 @@ function applyPlaceUnit(state: GameState, action: PlaceUnitAction): GameState {
   const newBatchCount = setup.batchCount + 1;
   const totalPlaced = setup.placementCount + 1;
 
+  const events: GameEvent[] = [{
+    type: 'unitPlaced',
+    turnNumber: 0,
+    playerId: action.playerId,
+    unitId: unit.id,
+    unitTypeId: action.unitTypeId,
+    position: action.position,
+  }];
+
   // Check if all units placed
   const allRostersEmpty = Object.values(updatedRoster).every(
     r => (r as string[]).length === 0,
   );
 
   if (allRostersEmpty) {
-    // Advance to gameplay
-    return {
-      ...state,
-      units: [...state.units, unit],
-      phase: 'gameplay',
+    events.push({ type: 'placementComplete', turnNumber: 0 });
+    events.push({
+      type: 'turnStarted',
       turnNumber: 1,
-      currentPlayerId: setup.moveOrder[0],
-      setupState: {
-        ...setup,
-        unplacedRoster: updatedRoster,
-        placementCount: totalPlaced,
-        batchCount: 0,
+      playerId: setup.moveOrder[0],
+    });
+
+    return {
+      state: {
+        ...state,
+        units: [...state.units, unit],
+        phase: 'gameplay',
+        turnNumber: 1,
+        currentPlayerId: setup.moveOrder[0],
+        setupState: {
+          ...setup,
+          unplacedRoster: updatedRoster,
+          placementCount: totalPlaced,
+          batchCount: 0,
+        },
       },
+      events,
     };
   }
 
@@ -329,22 +394,25 @@ function applyPlaceUnit(state: GameState, action: PlaceUnitAction): GameState {
   }
 
   return {
-    ...state,
-    units: [...state.units, unit],
-    setupState: {
-      ...setup,
-      placementCount: totalPlaced,
-      batchCount: nextBatchCount,
-      currentPlayerIndex: nextPlayerIndex,
-      unplacedRoster: updatedRoster,
+    state: {
+      ...state,
+      units: [...state.units, unit],
+      setupState: {
+        ...setup,
+        placementCount: totalPlaced,
+        batchCount: nextBatchCount,
+        currentPlayerIndex: nextPlayerIndex,
+        unplacedRoster: updatedRoster,
+      },
+      currentPlayerId: setup.moveOrder[nextPlayerIndex],
     },
-    currentPlayerId: setup.moveOrder[nextPlayerIndex],
+    events,
   };
 }
 
 // ========== Gameplay Phase ==========
 
-function applyMoveAction(state: GameState, action: MoveAction): GameState {
+function applyMoveAction(state: GameState, action: MoveAction): ActionResult {
   requireGameplay(state);
   const unit = getUnit(state, action.unitId);
   requireCurrentPlayer(state, unit.playerId);
@@ -353,17 +421,29 @@ function applyMoveAction(state: GameState, action: MoveAction): GameState {
   const validation = validateMove(unit, action.to, state.board, state.units);
   if (!validation.valid) throw new Error(validation.reason!);
 
+  const from = unit.position;
   const movedUnit = applyMove(unit, action.to, validation.distance!);
   const updatedUnit = ensureActivated(movedUnit);
 
   return {
-    ...state,
-    units: replaceUnit(state.units, updatedUnit),
-    activeUnitId: updatedUnit.id,
+    state: {
+      ...state,
+      units: replaceUnit(state.units, updatedUnit),
+      activeUnitId: updatedUnit.id,
+    },
+    events: [{
+      type: 'unitMoved',
+      turnNumber: state.turnNumber,
+      playerId: unit.playerId,
+      unitId: unit.id,
+      from,
+      to: action.to,
+      distance: validation.distance!,
+    }],
   };
 }
 
-function applyAttackAction(state: GameState, action: AttackAction): GameState {
+function applyAttackAction(state: GameState, action: AttackAction): ActionResult {
   requireGameplay(state);
   const attacker = getUnit(state, action.unitId);
   const target = getUnit(state, action.targetId);
@@ -411,18 +491,49 @@ function applyAttackAction(state: GameState, action: AttackAction): GameState {
     activeUnitId: updatedAttacker.id,
   };
 
+  const events: GameEvent[] = [{
+    type: 'attackResolved',
+    turnNumber: state.turnNumber,
+    playerId: attacker.playerId,
+    attackerId: attacker.id,
+    targetId: target.id,
+    roll: combat.attack.roll,
+    effectiveToHit: combat.attack.effectiveToHit,
+    hit: combat.attack.hit,
+    crit: combat.attack.crit,
+    damage: combat.attack.damage,
+    targetHpAfter: updatedTarget.currentHp,
+    targetKilled: combat.targetKilled,
+  }];
+
+  if (combat.targetKilled) {
+    events.push({
+      type: 'unitKilled',
+      turnNumber: state.turnNumber,
+      playerId: target.playerId,
+      unitId: target.id,
+      killedBy: attacker.id,
+    });
+  }
+
   // Check immediate win: all enemy units defeated
   if (combat.targetKilled) {
     const winCheck = checkAllUnitsDefeated(newState);
     if (winCheck) {
-      return { ...newState, ...winCheck };
+      newState = { ...newState, ...winCheck };
+      events.push({
+        type: 'gameWon',
+        turnNumber: state.turnNumber,
+        winner: winCheck.winner,
+        winCondition: winCheck.winCondition,
+      });
     }
   }
 
-  return newState;
+  return { state: newState, events };
 }
 
-function applyEndUnitTurn(state: GameState, action: EndUnitTurnAction): GameState {
+function applyEndUnitTurn(state: GameState, action: EndUnitTurnAction): ActionResult {
   requireGameplay(state);
   const unit = getUnit(state, action.unitId);
   requireCurrentPlayer(state, unit.playerId);
@@ -444,16 +555,23 @@ function applyEndUnitTurn(state: GameState, action: EndUnitTurnAction): GameStat
   };
 
   return {
-    ...state,
-    units: replaceUnit(state.units, updatedUnit),
-    activeUnitId: undefined,
+    state: {
+      ...state,
+      units: replaceUnit(state.units, updatedUnit),
+      activeUnitId: undefined,
+    },
+    events: [{
+      type: 'unitTurnEnded',
+      turnNumber: state.turnNumber,
+      playerId: unit.playerId,
+      unitId: unit.id,
+    }],
   };
 }
 
-function applyEndTurn(state: GameState): GameState {
+function applyEndTurn(state: GameState): ActionResult {
   requireGameplay(state);
 
-  // Reset all current player's units for next activation
   const currentPlayer = state.currentPlayerId;
   const nextPlayerIndex = getNextPlayerIndex(state);
   const nextPlayer = state.players[nextPlayerIndex].id;
@@ -483,25 +601,41 @@ function applyEndTurn(state: GameState): GameState {
     activeUnitId: undefined,
   };
 
+  const events: GameEvent[] = [
+    { type: 'turnEnded', turnNumber: state.turnNumber, playerId: currentPlayer },
+    { type: 'turnStarted', turnNumber: nextTurnNumber, playerId: nextPlayer },
+  ];
+
   // Check base control at start of new player's turn
-  newState = checkBaseControl(newState);
+  const baseResult = checkBaseControl(newState);
+  newState = baseResult.state;
+  events.push(...baseResult.events);
 
-  if (newState.winner) return newState;
-
-  return newState;
+  return { state: newState, events };
 }
 
-function applySurrender(state: GameState, action: SurrenderAction): GameState {
+function applySurrender(state: GameState, action: SurrenderAction): ActionResult {
   const otherPlayers = state.players.filter(p => p.id !== action.playerId);
   if (otherPlayers.length !== 1) {
     throw new Error('Surrender only supported in 2-player games');
   }
 
   return {
-    ...state,
-    phase: 'victory',
-    winner: otherPlayers[0].id,
-    winCondition: 'surrender',
+    state: {
+      ...state,
+      phase: 'victory',
+      winner: otherPlayers[0].id,
+      winCondition: 'surrender',
+    },
+    events: [
+      { type: 'surrender', turnNumber: state.turnNumber, playerId: action.playerId },
+      {
+        type: 'gameWon',
+        turnNumber: state.turnNumber,
+        winner: otherPlayers[0].id,
+        winCondition: 'surrender' as const,
+      },
+    ],
   };
 }
 
@@ -519,8 +653,9 @@ function checkAllUnitsDefeated(state: GameState): { phase: 'victory'; winner: Pl
   return null;
 }
 
-function checkBaseControl(state: GameState): GameState {
+function checkBaseControl(state: GameState): { state: GameState; events: GameEvent[] } {
   const updatedTimers = { ...state.baseControlTimers };
+  const events: GameEvent[] = [];
 
   for (const player of state.players) {
     // Check if current player controls any opponent's base
@@ -543,29 +678,53 @@ function checkBaseControl(state: GameState): GameState {
         // Attacker controls — increment timer
         updatedTimers[player.id] = (updatedTimers[player.id] ?? 0) + 1;
 
+        events.push({
+          type: 'baseControlChanged',
+          turnNumber: state.turnNumber,
+          playerId: player.id,
+          baseOwnerId: opponent.id,
+          timerValue: updatedTimers[player.id],
+          timerReset: false,
+        });
+
         // Check win threshold
         const threshold = player.factionId === 'mongols'
           ? MONGOL_BASE_CONTROL_TURNS_TO_WIN
           : BASE_CONTROL_TURNS_TO_WIN;
 
         if (updatedTimers[player.id] >= threshold) {
-          return {
+          const winState: GameState = {
             ...state,
             phase: 'victory',
             winner: player.id,
             winCondition: 'base_control',
             baseControlTimers: updatedTimers,
           };
+          events.push({
+            type: 'gameWon',
+            turnNumber: state.turnNumber,
+            winner: player.id,
+            winCondition: 'base_control',
+          });
+          return { state: winState, events };
         }
-      } else if (attackersInBase.length === 0) {
-        // No attackers — reset timer
+      } else if (attackersInBase.length === 0 && updatedTimers[player.id] > 0) {
+        // No attackers and timer was running — reset
         updatedTimers[player.id] = 0;
+        events.push({
+          type: 'baseControlChanged',
+          turnNumber: state.turnNumber,
+          playerId: player.id,
+          baseOwnerId: opponent.id,
+          timerValue: 0,
+          timerReset: true,
+        });
       }
       // If defenders present but attackers too — timer pauses (no change)
     }
   }
 
-  return { ...state, baseControlTimers: updatedTimers };
+  return { state: { ...state, baseControlTimers: updatedTimers }, events };
 }
 
 // ========== Helpers ==========
