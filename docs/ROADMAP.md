@@ -161,7 +161,7 @@ src/engine/
 
 ### Phase 3: Web UI — Manual Playtesting
 
-> **Status:** Not started<br>
+> **Status:** 🔄 In Progress (Chunk 1 complete)<br>
 > **Depends on:** Phase 1, Phase 2
 
 **Goal:** Playable hot-seat (same screen, two players alternate) web app with hex grid visualization.
@@ -179,7 +179,7 @@ src/engine/
 <details>
 <summary>Implementation chunks</summary>
 
-#### Chunk 1: Project Setup + Hex Grid Renderer
+#### Chunk 1: Project Setup + Hex Grid Renderer ✅
 
 1. Add Vite + React 18 to existing monorepo: `src/ui/` directory, `App.tsx`, `main.tsx`, Vite config, updated `package.json` scripts (`dev`, `build:ui`, `preview`), `index.html`
 2. `src/ui/components/HexGrid.tsx` — SVG hex board renderer: hex grid from Board data, coordinate labels (toggle), zone coloring (base, placement, terrain), responsive sizing
