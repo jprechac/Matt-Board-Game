@@ -119,18 +119,18 @@ src/engine/
 - [x] ~~**Missing getLegalActions API**~~ — Fixed: `getUnitActions()` + `getAllLegalActions()` added in `src/engine/actions.ts`. Needed by Phase 3 UI and Phase 4 AI.
 - [x] ~~**Missing baseControlChanged + empty serialization tests**~~ — Fixed: both test gaps from audit covered in `tests/engine/actions.test.ts`.
 - [ ] **Board visual polish** (low priority) — Placement zones and bases need more visual distinction beyond color (e.g. patterns, borders, icons). General hex grid aesthetics could be improved.
-- [ ] 🔴 **Roll-off priority choice incorrect** — Winner should choose which ORDER to control (faction selection or move order) and their position (first/second); loser gets the other order. Current engine hardcodes a 1:1 trade-off that's too restrictive. Requires new SetupStep + modified ChoosePriorityAction + UI update.
-- [ ] 🔴 **Ottoman medic can't heal** — No `heal` action type exists; `medic_heal` handler is a stub; `getUnitActions` only returns enemy targets; UI only dispatches `attack`. Needs: heal action type, handler in game.ts, `healTargets` in UnitActions, UI ally targeting.
-- [ ] 🔴 **Post-attack movement exploit** — After attacking, unit should move at most 1 hex total. But `getAvailableMovement()` recalculates remaining movement each call, allowing repeated 1-hex moves. Fix: track post-attack movement separately.
-- [ ] 🔴 **Samurai adjacency ability unclear** — `samurai_adjacency_bonus` handler may lack melee-only check, and there's no UI feedback when passive abilities activate. Need to verify handler logic + add ability trigger indicator.
-- [ ] 🟡 **Placement: player can't choose unit order** — Roster is a static list; player should select which unit to place each turn. Also, zone colors break during placement (base visuals disappear).
-- [ ] 🟡 **Combat overlay gets stuck** — "Target destroyed" popup doesn't dismiss; `useEffect` timer resets when new events arrive. Fix: use stable key per attack event.
-- [ ] 🟢 **Attack highlight color blends with red base** — Attack target hex overlay is too similar to player2's base zone color; hard to see. Use a more distinct color (bright orange, pulsing, etc.).
-- [ ] 🟢 **Display names show code IDs** — "basic_melee", "all_units_defeated" etc. shown in UI. Add `formatUnitName()` / `formatWinCondition()` helpers; title-case, no underscores.
+- [x] ~~🔴 **Roll-off priority choice incorrect**~~ — Fixed in Phase 3.5 Chunk 1: 2-step flow with `loserChoosePriority` step.
+- [x] ~~🔴 **Ottoman medic can't heal**~~ — Fixed in Phase 3.5 Chunk 2: `HealAction` type, handler in game.ts, `healTargets` in UnitActions, UI heal targeting.
+- [x] ~~🔴 **Post-attack movement exploit**~~ — Fixed in Phase 3.5 Chunk 1: `movementUsedAtAttack` snapshot tracks post-attack movement.
+- [x] ~~🔴 **Samurai adjacency ability unclear**~~ — Fixed in Phase 3.5 Chunk 1: melee range guard added to handler.
+- [x] ~~🟡 **Placement: player can't choose unit order**~~ — Fixed in Phase 3.5 Chunk 2: clickable roster with player-appropriate zone colors.
+- [x] ~~🟡 **Combat overlay gets stuck**~~ — Fixed in Phase 3.5 Chunk 2: split useEffects, eventKey counter, click-to-dismiss.
+- [x] ~~🟢 **Attack highlight color blends with red base**~~ — Fixed in Phase 3.5 Chunk 2: bright orange highlight.
+- [x] ~~🟢 **Display names show code IDs**~~ — Fixed in Phase 3.5 Chunk 2: `formatUnitName()` / `formatWinCondition()` / `formatFactionName()`.
 - [ ] 🟢 **Army selection UX** — +/- melee counter is awkward; screen mostly blank. Create reusable UnitStatCard showing full stats + ability description; use in army builder + gameplay hover/popup. Show leader info.
 - [ ] 🟢 **Auto-end turn** — When all units are exhausted (no actions remaining), auto-dispatch endTurn.
 - [ ] 🟢 **View enemy unit details** — Allow clicking enemy units to see stats in read-only UnitInfoPanel (without action highlights).
-- [ ] 🟢 **Victory text formatting** — Same display-name cleanup as above; "all_units_defeated" → "All Units Defeated".
+- [x] ~~🟢 **Victory text formatting**~~ — Fixed in Phase 3.5 Chunk 2: same `formatWinCondition()` utility.
 
 ---
 
@@ -236,7 +236,7 @@ src/engine/
 
 ### Phase 3.5: Playtest Bug Fixes
 
-> **Status:** Chunk 1 ✅ Complete | Chunk 2 pending<br>
+> **Status:** ✅ Complete (Chunk 1 + Chunk 2)<br>
 > **Depends on:** Phase 3<br>
 > **Must complete before:** Phase 4 (AI depends on correct engine behavior)
 
