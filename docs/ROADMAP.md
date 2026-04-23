@@ -236,33 +236,40 @@ src/engine/
 
 ### Phase 3.5: Playtest Bug Fixes
 
-> **Status:** Not started<br>
+> **Status:** Chunk 1 ✅ Complete | Chunk 2 pending<br>
 > **Depends on:** Phase 3<br>
 > **Must complete before:** Phase 4 (AI depends on correct engine behavior)
 
-**Goal:** Fix critical engine bugs and important UI issues found during Phase 3 playtesting.
+**Goal:** Fix critical engine bugs and important UI issues found during Phase 3 playtesting. Add scenario-level tests to prevent regressions.
 
 **🔴 Critical — Engine Bugs (2 chunks):**
 
 <details>
-<summary>Chunk 1: Engine Rule Fixes</summary>
+<summary>✅ Chunk 1: Engine Rule Fixes (Complete)</summary>
 
-1. **Roll-off priority choice** — Rework `choosePriority` to a 2-step flow: winner picks which order to control (faction/move) + their position (first/second); loser picks the remaining order. New SetupStep, modified ChoosePriorityAction, UI update.
-2. **Post-attack movement exploit** — Fix `getAvailableMovement()` to track post-attack movement separately. Unit should move at most 1 hex total after attacking, not 1 hex per click.
-3. **Samurai adjacency ability** — Verify `samurai_adjacency_bonus` handler applies only to melee attacks and triggers correctly when adjacent to 2+ enemies. Add test coverage.
+1. ~~**Roll-off priority choice**~~ — Reworked to 2-step flow: winner picks order to control + position; loser picks remaining. New `loserChoosePriority` SetupStep.
+2. ~~**Post-attack movement exploit**~~ — Fixed with `movementUsedAtAttack` snapshot in combat.ts. Movement capped correctly after attacking.
+3. ~~**Samurai adjacency ability**~~ — Added melee range guard in handler. Returns empty modifiers for non-adjacent attacks.
+
+*22 files changed, 414 insertions, 101 deletions. 309 tests passing.*
 
 </details>
 
 <details>
-<summary>Chunk 2: Heal Action + UI Fixes</summary>
+<summary>Chunk 2: Heal Action + UI Fixes + Scenario Tests</summary>
 
 1. **Medic heal action** — Create `heal` action type, implement handler in game.ts using existing `resolveHeal`, add `healTargets` to UnitActions, update UI to dispatch heal on ally click for medic units.
 2. **Combat overlay stuck** — Fix `useEffect` dependency in CombatOverlay to use stable key per attack event, preventing timer reset on new events.
 3. **Placement roster selection** — Let player choose which unit to place (clickable roster, not static order). Fix zone coloring during placement phase.
 4. **Display name cleanup** — Add `formatDisplayName()` utility; apply to unit names, win conditions, and anywhere code IDs are shown in UI.
 5. **Attack highlight color** — Use distinct color (bright orange or pulsing) for attack targets so they don't blend with red player's base zone.
+6. **Scenario tests (S01–S05)** — Add `tests/engine/scenarios.test.ts` with critical gameplay scenarios: post-attack movement cap, samurai melee guard, priority 2-step flow. See [`tests/TESTING_PLAN.md`](../tests/TESTING_PLAN.md) for full catalog.
 
 </details>
+
+**📋 Testing Documentation:**
+- [`tests/README.md`](../tests/README.md) — Testing guide: how to run, write, and organize tests
+- [`tests/TESTING_PLAN.md`](../tests/TESTING_PLAN.md) — 33 scenario tests cataloged across 3 priority tiers, gap analysis, unwired feature inventory
 
 **🟢 QoL Backlog (defer to Phase 5 or later):**
 - Army selection UX: reusable UnitStatCard component, leader info, better layout
@@ -308,6 +315,7 @@ src/engine/
 3. `src/ai/placement.ts` — Default army composition per faction, placement heuristics (ranged back, melee front, leader protected)
 4. `src/ai/strategies/generic.ts` — Generic strategy: target selection (prioritize low-HP/high-value/in-base), movement (advance/retreat), combat thresholds, turn sequencing
 5. Tests: evaluation scores are reasonable, placement is legal, generic bot completes games without illegal moves
+6. **Scenario tests (S06–S18):** Wire unwired engine features (healing, base control victory, elimination victory) and add corresponding scenario tests. See [`tests/TESTING_PLAN.md`](../tests/TESTING_PLAN.md) §Important scenarios.
 
 #### Chunk 2: Faction-Specific Tactics (11 factions)
 
