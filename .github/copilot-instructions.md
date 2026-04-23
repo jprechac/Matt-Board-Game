@@ -62,6 +62,18 @@ After a chunk is completed (by any agent or session):
 - **Vitest** for testing (`npm test`).
 - **Ability system** uses a composable handler/registry pattern (`src/engine/abilities/`).
 
+## Copilot Skills
+
+Custom skills are in `.github/skills/`. Use them by name in prompts or with `/skillname`.
+
+| Skill | When to Use | What It Does |
+|-------|-------------|--------------|
+| **session-catchup** | Returning after a break, "where are we?", status check | Reads ROADMAP + git log + tests, presents current state and next steps |
+| **chunk-implementation** | "Implement the next chunk", "start Phase X" | Full workflow: plan → rubber-duck critique → implement → test → commit → push |
+| **test-scenario-audit** | "Check test gaps", "audit coverage", after adding features | Scans engine code vs. tests vs. game rules, identifies missing scenarios |
+| **playtest-triage** | User provides playtest notes or bug reports | Classifies each item (bug/UX/polish), assigns priority, maps to roadmap phase |
+| **visual-inspection** | "Run the app", "let me see the UI", visual review | Starts dev server (port 5180), provides checklist of what to inspect |
+
 ## Key Files
 
 - `docs/ROADMAP.md` — Project roadmap, phase/chunk plans, status tracking, known issues.
