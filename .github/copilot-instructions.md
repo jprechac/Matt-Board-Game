@@ -64,7 +64,7 @@ After a chunk is completed (by any agent or session):
 
 ## Copilot Skills
 
-Custom skills are in `.github/skills/`. Use them by name in prompts or with `/skillname`.
+Custom skills are in `.github/skills/`. Mention them by name in your prompt (e.g., "use the session-catchup skill") and Copilot will follow the skill's instructions.
 
 | Skill | When to Use | What It Does |
 |-------|-------------|--------------|
