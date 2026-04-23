@@ -287,8 +287,8 @@ src/engine/
 **Goal:** Create a "Medium" difficulty AI for each faction so a single player can playtest vs computer.
 
 - [ ] AI interface — `Bot`: given `GameState`, return `Action[]` for the turn (stateless)
-- [ ] Evaluation heuristics — material advantage, board control, threat assessment, leader safety
-- [ ] Generic strategy layer — target selection, movement strategy, combat decision thresholds
+- [x] ~~Evaluation heuristics — material advantage, board control, threat assessment, leader safety~~ ✅ Phase 4 Chunk 1
+- [x] ~~Generic strategy layer — target selection, movement strategy, combat decision thresholds~~ ✅ Phase 4 Chunk 1
 - [ ] Faction-specific tactics for all 11 factions:
   - Aztecs: Priest positioning, Jaguar sacrifice tracking
   - Bulgars: Terrain exploitation, Khan Krum anti-terrain positioning
@@ -301,14 +301,14 @@ src/engine/
   - Romans: Formation maintenance (Legionnaire adjacency), Caesar redirect
   - Vandals: Lone-wolf positioning (Raider/Genseric solo bonuses)
   - Vikings: Eric double-attack targeting, Berserker aggression
-- [ ] Army composition selection — default "recommended" comp per faction
-- [ ] Placement logic — ranged behind melee, leader protected
+- [x] ~~Army composition selection — default "recommended" comp per faction~~ ✅ Phase 4 Chunk 1
+- [x] ~~Placement logic — ranged behind melee, leader protected~~ ✅ Phase 4 Chunk 1
 - [ ] "Play vs AI" mode in the web UI
 
 <details>
 <summary>Implementation chunks</summary>
 
-#### Chunk 1: AI Framework + Evaluation Heuristics
+#### Chunk 1: AI Framework + Evaluation Heuristics ✅ Complete
 
 1. `src/ai/types.ts` — `Bot` interface (stateless: GameState + PlayerId → Action[]), `BotConfig` for difficulty/faction params
 2. `src/ai/evaluate.ts` — Board evaluation heuristics: material advantage (weighted HP), board control, threat assessment, leader safety, base control urgency, unit positioning
