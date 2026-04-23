@@ -2,15 +2,15 @@
  * Generic medium-difficulty AI strategy.
  *
  * Works for any faction by scoring legal actions using board evaluation
- * heuristics. Faction-specific strategies (Phase 4 Chunk 2) will
- * override this with specialized logic.
+ * heuristics. Faction-specific strategies extend this by providing a
+ * ScoreAdjuster that tweaks scores based on faction abilities.
  */
 import type {
   GameState, Action, PlayerId, FactionId,
   MoveAction, AttackAction, HealAction,
 } from '../../engine/types.js';
 import { ALL_FACTION_IDS } from '../../engine/types.js';
-import { cubeDistance, hexKey } from '../../engine/hex.js';
+import { cubeDistance, hexKey, cubeNeighbors } from '../../engine/hex.js';
 import { getBaseCells } from '../../engine/board.js';
 import { getAllLegalActions, getUnitActions } from '../../engine/actions.js';
 import { getUnitDef } from '../../engine/data/factions/index.js';
@@ -18,10 +18,19 @@ import { evaluateBoard } from '../evaluate.js';
 import { getDefaultComposition, choosePlacementPosition } from '../placement.js';
 import type { Bot, BotConfig, ScoredAction } from '../types.js';
 
+// ========== Types ==========
+
+/** Adjusts action scores based on faction-specific tactics. */
+export type ScoreAdjuster = (
+  state: GameState,
+  playerId: PlayerId,
+  scored: ScoredAction,
+) => ScoredAction;
+
 // ========== Bot Factory ==========
 
-/** Create a generic bot that works for any faction. */
-export function createGenericBot(config: BotConfig): Bot {
+/** Create a generic bot, optionally with a faction-specific score adjuster. */
+export function createGenericBot(config: BotConfig, adjuster?: ScoreAdjuster): Bot {
   return {
     chooseAction(state: GameState, playerId: PlayerId): Action {
       switch (state.phase) {
@@ -30,9 +39,8 @@ export function createGenericBot(config: BotConfig): Bot {
         case 'placement':
           return choosePlacementAction(state, playerId);
         case 'gameplay':
-          return chooseGameplayAction(state, playerId);
+          return chooseGameplayAction(state, playerId, adjuster);
         default:
-          // Victory or unknown — surrender as fallback
           return { type: 'surrender', playerId };
       }
     },
@@ -109,17 +117,20 @@ function prioritizeUnitTypes(roster: readonly string[], factionId: FactionId): s
 
 // ========== Gameplay Phase ==========
 
-function chooseGameplayAction(state: GameState, playerId: PlayerId): Action {
+function chooseGameplayAction(state: GameState, playerId: PlayerId, adjuster?: ScoreAdjuster): Action {
   const legalActions = getAllLegalActions(state);
   if (legalActions.length === 0) {
     return { type: 'endTurn' };
   }
 
-  // Score each action
+  // Score each action, apply faction adjustments
   const scored: ScoredAction[] = [];
   for (const action of legalActions) {
-    const score = scoreAction(state, playerId, action);
-    scored.push(score);
+    let sa = scoreAction(state, playerId, action);
+    if (adjuster) {
+      sa = adjuster(state, playerId, sa);
+    }
+    scored.push(sa);
   }
 
   // Sort by score descending
@@ -149,6 +160,31 @@ function scoreAction(
     default:
       return { action, score: 0, reason: 'unknown action' };
   }
+}
+
+// ========== Exported Utilities for Faction Strategies ==========
+
+/** Count allied units adjacent to a given position. */
+export function countAdjacentAllies(state: GameState, playerId: PlayerId, pos: { q: number; r: number; s: number }): number {
+  const neighbors = cubeNeighbors(pos);
+  return state.units.filter(u =>
+    u.playerId === playerId && u.currentHp > 0 &&
+    neighbors.some(n => hexKey(n) === hexKey(u.position)),
+  ).length;
+}
+
+/** Count enemy units adjacent to a given position. */
+export function countAdjacentEnemies(state: GameState, playerId: PlayerId, pos: { q: number; r: number; s: number }): number {
+  const neighbors = cubeNeighbors(pos);
+  return state.units.filter(u =>
+    u.playerId !== playerId && u.currentHp > 0 &&
+    neighbors.some(n => hexKey(n) === hexKey(u.position)),
+  ).length;
+}
+
+/** Check if a unit is within range hexes of a reference position. */
+export function isWithinRange(pos1: { q: number; r: number; s: number }, pos2: { q: number; r: number; s: number }, range: number): boolean {
+  return cubeDistance(pos1, pos2) <= range;
 }
 
 // ========== Action Scoring ==========

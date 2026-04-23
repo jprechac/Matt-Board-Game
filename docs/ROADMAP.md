@@ -289,7 +289,7 @@ src/engine/
 - [ ] AI interface — `Bot`: given `GameState`, return `Action[]` for the turn (stateless)
 - [x] ~~Evaluation heuristics — material advantage, board control, threat assessment, leader safety~~ ✅ Phase 4 Chunk 1
 - [x] ~~Generic strategy layer — target selection, movement strategy, combat decision thresholds~~ ✅ Phase 4 Chunk 1
-- [ ] Faction-specific tactics for all 11 factions:
+- [x] ~~Faction-specific tactics for all 11 factions:~~ ✅ Phase 4 Chunk 2
   - Aztecs: Priest positioning, Jaguar sacrifice tracking
   - Bulgars: Terrain exploitation, Khan Krum anti-terrain positioning
   - English: Arthur upgrade timing, Longbowman crit positioning
@@ -317,7 +317,7 @@ src/engine/
 5. Tests: evaluation scores are reasonable, placement is legal, generic bot completes games without illegal moves
 6. **Scenario tests (S06–S18):** Wire unwired engine features (healing, base control victory, elimination victory) and add corresponding scenario tests. See [`tests/TESTING_PLAN.md`](../tests/TESTING_PLAN.md) §Important scenarios.
 
-#### Chunk 2: Faction-Specific Tactics (11 factions)
+#### Chunk 2: Faction-Specific Tactics (11 factions) ✅ Complete
 
 1. `src/ai/strategies/aztecs.ts` — Priest positioning, Jaguar sacrifice tracking
 2. `src/ai/strategies/bulgars.ts` — Terrain exploitation, Khan Krum anti-terrain positioning
