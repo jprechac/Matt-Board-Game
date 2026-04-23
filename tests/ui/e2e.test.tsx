@@ -141,9 +141,12 @@ describe('Full game engine flow', () => {
     expect(state.phase).toBe('setup');
     expect(state.setupState!.currentStep).toBe('choosePriority');
 
-    // Choose priority
+    // Choose priority (2-step)
     const winner = state.setupState!.rollWinner!;
-    state = applyAction(state, { type: 'choosePriority', playerId: winner, choice: 'pickFactionFirst' });
+    const loser = state.players.find(p => p.id !== winner)!.id;
+    state = applyAction(state, { type: 'choosePriority', playerId: winner, orderToControl: 'factionOrder', position: 'first' });
+    expect(state.setupState!.currentStep).toBe('loserChoosePriority');
+    state = applyAction(state, { type: 'choosePriority', playerId: loser, position: 'first' });
     expect(state.setupState!.currentStep).toBe('factionSelection');
 
     // Select factions

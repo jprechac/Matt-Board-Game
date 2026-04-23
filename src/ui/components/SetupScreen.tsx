@@ -31,6 +31,7 @@ export function SetupScreen({ gameState, dispatch, lastError }: SetupScreenProps
       )}
 
       {step === 'choosePriority' && <ChoosePriorityStep gameState={gameState} dispatch={dispatch} />}
+      {step === 'loserChoosePriority' && <LoserChoosePriorityStep gameState={gameState} dispatch={dispatch} />}
       {step === 'factionSelection' && <FactionSelectionStep gameState={gameState} dispatch={dispatch} />}
       {step === 'armyComposition' && <ArmyCompositionStep gameState={gameState} dispatch={dispatch} />}
     </div>
@@ -51,25 +52,86 @@ function ChoosePriorityStep({ gameState, dispatch }: { gameState: GameState; dis
         🎲 <strong>{winner}</strong> won the roll!
       </div>
       <div style={{ fontSize: '15px', marginBottom: '16px', color: '#e2e8f0' }}>
-        Choose your advantage:
+        Choose which order to control, and your position:
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center' }}>
+        <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#94a3b8' }}>Faction Selection Order</div>
+        <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
+          <button
+            onClick={() => dispatch({ type: 'choosePriority', playerId: winner, orderToControl: 'factionOrder', position: 'first' })}
+            style={bigButtonStyle('#2563eb')}
+          >
+            Pick Faction First
+            <span style={{ display: 'block', fontSize: '11px', color: '#93c5fd', marginTop: '4px' }}>
+              Choose your faction before your opponent
+            </span>
+          </button>
+          <button
+            onClick={() => dispatch({ type: 'choosePriority', playerId: winner, orderToControl: 'factionOrder', position: 'second' })}
+            style={bigButtonStyle('#1e40af')}
+          >
+            Pick Faction Second
+            <span style={{ display: 'block', fontSize: '11px', color: '#93c5fd', marginTop: '4px' }}>
+              Counter-pick after seeing your opponent's faction
+            </span>
+          </button>
+        </div>
+        <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#94a3b8', marginTop: '8px' }}>Move Order</div>
+        <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
+          <button
+            onClick={() => dispatch({ type: 'choosePriority', playerId: winner, orderToControl: 'moveOrder', position: 'first' })}
+            style={bigButtonStyle('#16a34a')}
+          >
+            Move First
+            <span style={{ display: 'block', fontSize: '11px', color: '#86efac', marginTop: '4px' }}>
+              Take the first turn in gameplay
+            </span>
+          </button>
+          <button
+            onClick={() => dispatch({ type: 'choosePriority', playerId: winner, orderToControl: 'moveOrder', position: 'second' })}
+            style={bigButtonStyle('#15803d')}
+          >
+            Move Second
+            <span style={{ display: 'block', fontSize: '11px', color: '#86efac', marginTop: '4px' }}>
+              Let your opponent go first
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LoserChoosePriorityStep({ gameState, dispatch }: { gameState: GameState; dispatch: any }) {
+  const setup = gameState.setupState!;
+  const loser = gameState.currentPlayerId;
+  const winnerOrder = setup.winnerOrderChoice!;
+  const remainingOrder = winnerOrder === 'factionOrder' ? 'Move Order' : 'Faction Selection Order';
+  const colors = getPlayerColors(loser);
+
+  return (
+    <div style={{ textAlign: 'center' }}>
+      <div style={{ fontSize: '18px', marginBottom: '8px', color: '#94a3b8' }}>Your Turn</div>
+      <div style={{ fontSize: '22px', marginBottom: '24px', color: colors.text }}>
+        <strong>{loser}</strong>, choose your position in <strong>{remainingOrder}</strong>:
       </div>
       <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
         <button
-          onClick={() => dispatch({ type: 'choosePriority', playerId: winner, choice: 'pickFactionFirst' })}
+          onClick={() => dispatch({ type: 'choosePriority', playerId: loser, position: 'first' })}
           style={bigButtonStyle('#2563eb')}
         >
-          Pick Faction First
+          Go First
           <span style={{ display: 'block', fontSize: '11px', color: '#93c5fd', marginTop: '4px' }}>
-            Choose your faction before your opponent
+            {winnerOrder === 'factionOrder' ? 'Take the first turn' : 'Pick your faction first'}
           </span>
         </button>
         <button
-          onClick={() => dispatch({ type: 'choosePriority', playerId: winner, choice: 'moveFirst' })}
-          style={bigButtonStyle('#16a34a')}
+          onClick={() => dispatch({ type: 'choosePriority', playerId: loser, position: 'second' })}
+          style={bigButtonStyle('#1e40af')}
         >
-          Move First
-          <span style={{ display: 'block', fontSize: '11px', color: '#86efac', marginTop: '4px' }}>
-            Take the first turn in gameplay
+          Go Second
+          <span style={{ display: 'block', fontSize: '11px', color: '#93c5fd', marginTop: '4px' }}>
+            {winnerOrder === 'factionOrder' ? 'Let your opponent go first' : 'Counter-pick after your opponent'}
           </span>
         </button>
       </div>

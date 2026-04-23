@@ -34,9 +34,10 @@ export function getAvailableMovement(unit: Unit): number {
   const baseMovement = unit.movement;
 
   if (unit.hasAttackedThisTurn) {
-    // After attacking: can move at most 1 hex total from remaining movement
-    const remaining = baseMovement - unit.movementUsedThisTurn;
-    return Math.min(remaining, POST_ATTACK_MAX_MOVEMENT);
+    // Cap total post-attack movement to POST_ATTACK_MAX_MOVEMENT
+    const postAttackMovement = unit.movementUsedThisTurn - unit.movementUsedAtAttack;
+    const baseRemaining = baseMovement - unit.movementUsedThisTurn;
+    return Math.max(0, Math.min(baseRemaining, POST_ATTACK_MAX_MOVEMENT - postAttackMovement));
   }
 
   return baseMovement - unit.movementUsedThisTurn;

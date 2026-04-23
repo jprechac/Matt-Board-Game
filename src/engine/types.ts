@@ -46,10 +46,13 @@ export type GamePhase = 'setup' | 'placement' | 'gameplay' | 'victory';
 export type SetupStep =
   | 'rollOff'
   | 'choosePriority'
+  | 'loserChoosePriority'
   | 'factionSelection'
   | 'armyComposition'
   | 'terrainPlacement'
   | 'unitPlacement';
+
+export type PriorityOrderType = 'factionOrder' | 'moveOrder';
 
 // ========== Unit Definitions (data / templates) ==========
 
@@ -102,6 +105,7 @@ export interface Unit {
   readonly hasAttackedThisTurn: boolean;
   readonly hasUsedAbilityThisTurn: boolean;
   readonly movementUsedThisTurn: number;
+  readonly movementUsedAtAttack: number;
   readonly activatedThisTurn: boolean;
   readonly abilityState: Record<string, unknown>;
 }
@@ -187,7 +191,8 @@ export interface PlaceTerrainAction {
 export interface ChoosePriorityAction {
   readonly type: 'choosePriority';
   readonly playerId: PlayerId;
-  readonly choice: 'pickFactionFirst' | 'moveFirst';
+  readonly orderToControl?: PriorityOrderType; // required for winner, absent for loser
+  readonly position: 'first' | 'second';
 }
 
 export interface SurrenderAction {
@@ -239,6 +244,8 @@ export interface SetupState {
   readonly placementCount: number;
   readonly batchCount: number; // 0, 1 within a 2-unit batch
   readonly unplacedRoster: Partial<Record<PlayerId, readonly string[]>>; // unitTypeIds remaining
+  readonly winnerOrderChoice?: PriorityOrderType; // which order the winner chose to control
+  readonly winnerPosition?: 'first' | 'second'; // winner's position in their chosen order
 }
 
 export interface PlayerState {

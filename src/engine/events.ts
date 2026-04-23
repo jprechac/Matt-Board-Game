@@ -26,7 +26,8 @@ export interface RollOffResolvedEvent extends BaseGameEvent {
 export interface PriorityChosenEvent extends BaseGameEvent {
   readonly type: 'priorityChosen';
   readonly playerId: PlayerId;
-  readonly choice: 'pickFactionFirst' | 'moveFirst';
+  readonly orderControlled: 'factionOrder' | 'moveOrder';
+  readonly position: 'first' | 'second';
 }
 
 export interface FactionSelectedEvent extends BaseGameEvent {

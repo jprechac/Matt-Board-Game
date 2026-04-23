@@ -128,47 +128,95 @@ export function applyActionDetailed(state: GameState, action: Action): ActionRes
 // ========== Setup Phase ==========
 
 function applyChoosePriority(state: GameState, action: ChoosePriorityAction): ActionResult {
-  const setup = requireSetup(state, 'choosePriority');
-  if (action.playerId !== setup.rollWinner) {
-    throw new Error(`Only the roll winner (${setup.rollWinner}) can choose priority`);
+  const setup = state.setupState!;
+
+  if (setup.currentStep === 'choosePriority') {
+    // Winner's turn: choose which order to control and their position in it
+    if (action.playerId !== setup.rollWinner) {
+      throw new Error(`Only the roll winner (${setup.rollWinner}) can choose priority`);
+    }
+    if (!action.orderToControl) {
+      throw new Error('Winner must specify orderToControl');
+    }
+
+    const otherPlayer = state.players.find(p => p.id !== action.playerId)!.id;
+
+    const newState: GameState = {
+      ...state,
+      currentPlayerId: otherPlayer,
+      setupState: {
+        ...setup,
+        currentStep: 'loserChoosePriority',
+        winnerOrderChoice: action.orderToControl,
+        winnerPosition: action.position,
+      },
+    };
+
+    return {
+      state: newState,
+      events: [{
+        type: 'priorityChosen',
+        turnNumber: 0,
+        playerId: action.playerId,
+        orderControlled: action.orderToControl,
+        position: action.position,
+      }],
+    };
+  } else if (setup.currentStep === 'loserChoosePriority') {
+    // Loser's turn: choose their position in the remaining order
+    if (action.playerId === setup.rollWinner) {
+      throw new Error('Only the loser can choose priority in this step');
+    }
+
+    const winnerId = setup.rollWinner!;
+    const loserId = action.playerId;
+    const winnerOrder = setup.winnerOrderChoice!;
+    const winnerPos = setup.winnerPosition!;
+    const loserPos = action.position;
+
+    // Build the two orders
+    const winnerOrderArr = winnerPos === 'first' ? [winnerId, loserId] : [loserId, winnerId];
+    const loserOrderArr = loserPos === 'first' ? [loserId, winnerId] : [winnerId, loserId];
+
+    let factionSelectionOrder: PlayerId[];
+    let moveOrder: PlayerId[];
+
+    if (winnerOrder === 'factionOrder') {
+      factionSelectionOrder = winnerOrderArr;
+      moveOrder = loserOrderArr;
+    } else {
+      moveOrder = winnerOrderArr;
+      factionSelectionOrder = loserOrderArr;
+    }
+
+    const remainingOrder: 'factionOrder' | 'moveOrder' =
+      winnerOrder === 'factionOrder' ? 'moveOrder' : 'factionOrder';
+
+    const newState: GameState = {
+      ...state,
+      setupState: {
+        ...setup,
+        factionSelectionOrder,
+        moveOrder,
+        currentStep: 'factionSelection',
+        currentPlayerIndex: 0,
+      },
+      currentPlayerId: factionSelectionOrder[0],
+    };
+
+    return {
+      state: newState,
+      events: [{
+        type: 'priorityChosen',
+        turnNumber: 0,
+        playerId: action.playerId,
+        orderControlled: remainingOrder,
+        position: action.position,
+      }],
+    };
   }
 
-  const otherPlayers = state.players.filter(p => p.id !== action.playerId).map(p => p.id);
-
-  let factionSelectionOrder: PlayerId[];
-  let moveOrder: PlayerId[];
-
-  if (action.choice === 'pickFactionFirst') {
-    factionSelectionOrder = [action.playerId, ...otherPlayers];
-    // Other player gets to decide move order — for simplicity, they move first
-    moveOrder = [...otherPlayers, action.playerId];
-  } else {
-    // Winner chose to move first; other player picks faction first
-    moveOrder = [action.playerId, ...otherPlayers];
-    factionSelectionOrder = [...otherPlayers, action.playerId];
-  }
-
-  const newState: GameState = {
-    ...state,
-    setupState: {
-      ...setup,
-      factionSelectionOrder,
-      moveOrder,
-      currentStep: 'factionSelection',
-      currentPlayerIndex: 0,
-    },
-    currentPlayerId: factionSelectionOrder[0],
-  };
-
-  return {
-    state: newState,
-    events: [{
-      type: 'priorityChosen',
-      turnNumber: 0,
-      playerId: action.playerId,
-      choice: action.choice,
-    }],
-  };
+  throw new Error(`Not in a choosePriority step (current: ${setup.currentStep})`);
 }
 
 function applySelectFaction(state: GameState, action: SelectFactionAction): ActionResult {
@@ -585,6 +633,7 @@ function applyEndTurn(state: GameState): ActionResult {
         hasAttackedThisTurn: false,
         hasUsedAbilityThisTurn: false,
         movementUsedThisTurn: 0,
+        movementUsedAtAttack: 0,
         activatedThisTurn: false,
       };
     }
@@ -836,6 +885,7 @@ function createUnit(
     hasAttackedThisTurn: false,
     hasUsedAbilityThisTurn: false,
     movementUsedThisTurn: 0,
+    movementUsedAtAttack: 0,
     activatedThisTurn: false,
     abilityState: def.abilityId ? { abilityId: def.abilityId } : {},
   };

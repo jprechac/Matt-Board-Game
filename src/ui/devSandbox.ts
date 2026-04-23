@@ -21,7 +21,11 @@ export function createDevGameplayState(seed: number = 42): GameState {
 
   const rollWinner = state.setupState!.rollWinner!;
   state = applyAction(state, {
-    type: 'choosePriority', playerId: rollWinner, choice: 'pickFactionFirst',
+    type: 'choosePriority', playerId: rollWinner, orderToControl: 'factionOrder', position: 'first',
+  });
+  const loserId = state.players.find(p => p.id !== rollWinner)!.id;
+  state = applyAction(state, {
+    type: 'choosePriority', playerId: loserId, position: 'first',
   });
 
   const factionOrder = state.setupState!.factionSelectionOrder;

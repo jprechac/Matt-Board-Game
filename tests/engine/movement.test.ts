@@ -22,6 +22,7 @@ function makeUnit(overrides: Partial<Unit> & { id: string; position: Unit['posit
     hasAttackedThisTurn: false,
     hasUsedAbilityThisTurn: false,
     movementUsedThisTurn: 0,
+    movementUsedAtAttack: 0,
     activatedThisTurn: false,
     abilityState: {},
     ...overrides,
@@ -83,20 +84,36 @@ describe('getAvailableMovement', () => {
     expect(getAvailableMovement(unit)).toBe(2);
   });
 
-  it('limits to 1 after attacking', () => {
+  it('limits to 1 after attacking with no prior movement', () => {
     const unit = makeUnit({
       id: 'u1', position: offsetToCube(5, 5), movement: 3,
-      hasAttackedThisTurn: true, movementUsedThisTurn: 1,
+      hasAttackedThisTurn: true, movementUsedThisTurn: 0, movementUsedAtAttack: 0,
     });
     expect(getAvailableMovement(unit)).toBe(1);
   });
 
-  it('returns 0 after attacking if all movement used', () => {
+  it('returns 0 after attacking and using post-attack movement', () => {
     const unit = makeUnit({
       id: 'u1', position: offsetToCube(5, 5), movement: 3,
-      hasAttackedThisTurn: true, movementUsedThisTurn: 3,
+      hasAttackedThisTurn: true, movementUsedThisTurn: 1, movementUsedAtAttack: 0,
     });
     expect(getAvailableMovement(unit)).toBe(0);
+  });
+
+  it('returns 0 after moving then attacking if no base movement remains', () => {
+    const unit = makeUnit({
+      id: 'u1', position: offsetToCube(5, 5), movement: 3,
+      hasAttackedThisTurn: true, movementUsedThisTurn: 3, movementUsedAtAttack: 3,
+    });
+    expect(getAvailableMovement(unit)).toBe(0);
+  });
+
+  it('allows 1 post-attack move when movement remains', () => {
+    const unit = makeUnit({
+      id: 'u1', position: offsetToCube(5, 5), movement: 4,
+      hasAttackedThisTurn: true, movementUsedThisTurn: 2, movementUsedAtAttack: 2,
+    });
+    expect(getAvailableMovement(unit)).toBe(1);
   });
 });
 

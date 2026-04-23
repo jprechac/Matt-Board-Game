@@ -97,6 +97,10 @@ const samuraiAdjacencyBonus: AbilityHandler = {
   id: 'samurai_adjacency_bonus',
   description: 'Melee To Hit gets -1 bonus if unit is adjacent to 2+ enemies.',
   onAttack(ctx, target) {
+    // Only applies to melee attacks (adjacent range)
+    if (cubeDistance(ctx.unit.position, target.position) !== 1) {
+      return {};
+    }
     const neighbors = cubeNeighbors(ctx.unit.position);
     const adjacentEnemies = ctx.allUnits.filter(u =>
       u.currentHp > 0 &&

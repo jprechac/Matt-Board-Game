@@ -26,6 +26,7 @@ function makeUnit(overrides: Partial<Unit> & { id: string; position: CubeCoord }
     hasAttackedThisTurn: false,
     hasUsedAbilityThisTurn: false,
     movementUsedThisTurn: 0,
+    movementUsedAtAttack: 0,
     activatedThisTurn: false,
     abilityState: {},
     ...overrides,

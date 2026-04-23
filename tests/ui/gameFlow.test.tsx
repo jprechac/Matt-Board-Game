@@ -27,6 +27,8 @@ describe('SetupScreen', () => {
     expect(container.textContent).toContain('won the roll');
     expect(container.textContent).toContain('Pick Faction First');
     expect(container.textContent).toContain('Move First');
+    expect(container.textContent).toContain('Pick Faction Second');
+    expect(container.textContent).toContain('Move Second');
   });
 
   it('dispatches choosePriority action on button click', () => {
@@ -39,7 +41,7 @@ describe('SetupScreen', () => {
     expect(pickBtn).toBeTruthy();
     fireEvent.click(pickBtn!);
     expect(dispatch).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'choosePriority', choice: 'pickFactionFirst' })
+      expect.objectContaining({ type: 'choosePriority', orderToControl: 'factionOrder', position: 'first' })
     );
   });
 

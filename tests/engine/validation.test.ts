@@ -13,10 +13,17 @@ const DEFAULT_CONFIG: GameConfig = {
 function setupToFactionSelection(seed = 42): GameState {
   let state = createGame({ ...DEFAULT_CONFIG, seed });
   const winner = state.currentPlayerId;
-  return applyAction(state, {
+  state = applyAction(state, {
     type: 'choosePriority',
     playerId: winner,
-    choice: 'pickFactionFirst',
+    orderToControl: 'factionOrder',
+    position: 'first',
+  });
+  const loser = state.players.find(p => p.id !== winner)!.id;
+  return applyAction(state, {
+    type: 'choosePriority',
+    playerId: loser,
+    position: 'first',
   });
 }
 
@@ -46,7 +53,8 @@ describe('validateAction', () => {
       const result = validateAction(state, {
         type: 'choosePriority',
         playerId: winner,
-        choice: 'pickFactionFirst',
+        orderToControl: 'factionOrder',
+        position: 'first',
       });
       expect(result.valid).toBe(true);
     });
@@ -57,7 +65,8 @@ describe('validateAction', () => {
       const result = validateAction(state, {
         type: 'choosePriority',
         playerId: nonWinner,
-        choice: 'pickFactionFirst',
+        orderToControl: 'factionOrder',
+        position: 'first',
       });
       expect(result.valid).toBe(false);
     });
@@ -67,7 +76,8 @@ describe('validateAction', () => {
       const result = validateAction(state, {
         type: 'choosePriority',
         playerId: state.currentPlayerId,
-        choice: 'pickFactionFirst',
+        orderToControl: 'factionOrder',
+        position: 'first',
       });
       expect(result.valid).toBe(false);
     });

@@ -41,7 +41,10 @@ function setupToGameplay(seed: number = 42): RecordedGame {
   const otherPlayer = rollWinner === 'player1' ? 'player2' : 'player1';
 
   game = applyRecordedAction(game, {
-    type: 'choosePriority', playerId: rollWinner, choice: 'pickFactionFirst',
+    type: 'choosePriority', playerId: rollWinner, orderToControl: 'factionOrder', position: 'first',
+  });
+  game = applyRecordedAction(game, {
+    type: 'choosePriority', playerId: otherPlayer, position: 'first',
   });
 
   const factionOrder = game.state.setupState!.factionSelectionOrder;
@@ -105,21 +108,26 @@ describe('applyRecordedAction', () => {
     const winner = game.state.setupState!.rollWinner!;
 
     game = applyRecordedAction(game, {
-      type: 'choosePriority', playerId: winner, choice: 'pickFactionFirst',
+      type: 'choosePriority', playerId: winner, orderToControl: 'factionOrder', position: 'first',
     });
 
     const events = getEventsByType<PriorityChosenEvent>(game.recording, 'priorityChosen');
     expect(events).toHaveLength(1);
     expect(events[0].playerId).toBe(winner);
-    expect(events[0].choice).toBe('pickFactionFirst');
+    expect(events[0].orderControlled).toBe('factionOrder');
+    expect(events[0].position).toBe('first');
   });
 
   it('records faction selection events', () => {
     let game = createRecordedGame(config);
     const winner = game.state.setupState!.rollWinner!;
+    const loser = game.state.players.find(p => p.id !== winner)!.id;
 
     game = applyRecordedAction(game, {
-      type: 'choosePriority', playerId: winner, choice: 'pickFactionFirst',
+      type: 'choosePriority', playerId: winner, orderToControl: 'factionOrder', position: 'first',
+    });
+    game = applyRecordedAction(game, {
+      type: 'choosePriority', playerId: loser, position: 'first',
     });
 
     const factionOrder = game.state.setupState!.factionSelectionOrder;
@@ -139,9 +147,13 @@ describe('applyRecordedAction', () => {
   it('records army composition events', () => {
     let game = createRecordedGame(config);
     const winner = game.state.setupState!.rollWinner!;
+    const loser = game.state.players.find(p => p.id !== winner)!.id;
 
     game = applyRecordedAction(game, {
-      type: 'choosePriority', playerId: winner, choice: 'pickFactionFirst',
+      type: 'choosePriority', playerId: winner, orderToControl: 'factionOrder', position: 'first',
+    });
+    game = applyRecordedAction(game, {
+      type: 'choosePriority', playerId: loser, position: 'first',
     });
     const factionOrder = game.state.setupState!.factionSelectionOrder;
     game = applyRecordedAction(game, {
@@ -166,7 +178,7 @@ describe('applyRecordedAction', () => {
     const winner = game.state.setupState!.rollWinner!;
 
     game = applyRecordedAction(game, {
-      type: 'choosePriority', playerId: winner, choice: 'pickFactionFirst',
+      type: 'choosePriority', playerId: winner, orderToControl: 'factionOrder', position: 'first',
     });
     expect(game.recording.actions).toHaveLength(1);
     expect(game.recording.actions[0].type).toBe('choosePriority');
@@ -287,13 +299,14 @@ describe('full game recording', () => {
   it('records a complete game from start to finish', () => {
     const game = setupToGameplay();
 
-    // Verify event ordering: gameStarted → rollOff → priority → factions → armies → placements → turnStarted
+    // Verify event ordering: gameStarted → rollOff → priority(x2) → factions → armies → placements → turnStarted
     const types = game.recording.events.map(e => e.type);
     expect(types[0]).toBe('gameStarted');
     expect(types[1]).toBe('rollOffResolved');
     expect(types[2]).toBe('priorityChosen');
-    expect(types[3]).toBe('factionSelected');
+    expect(types[3]).toBe('priorityChosen');
     expect(types[4]).toBe('factionSelected');
+    expect(types[5]).toBe('factionSelected');
     expect(types.includes('armyCompositionSet')).toBe(true);
     expect(types.includes('unitPlaced')).toBe(true);
     expect(types.includes('placementComplete')).toBe(true);
@@ -302,8 +315,8 @@ describe('full game recording', () => {
 
   it('action count matches actions recorded', () => {
     const game = setupToGameplay();
-    // Actions: choosePriority + 2 selectFaction + 2 setArmy + 18 placeUnit = 23
-    expect(game.recording.actions).toHaveLength(23);
+    // Actions: 2 choosePriority + 2 selectFaction + 2 setArmy + 18 placeUnit = 24
+    expect(game.recording.actions).toHaveLength(24);
   });
 
   it('getEventsByType filters correctly', () => {
@@ -319,10 +332,10 @@ describe('applyActionDetailed', () => {
     const game = createRecordedGame(config);
     const winner = game.state.setupState!.rollWinner!;
     const { state, events } = applyActionDetailed(game.state, {
-      type: 'choosePriority', playerId: winner, choice: 'moveFirst',
+      type: 'choosePriority', playerId: winner, orderToControl: 'moveOrder', position: 'first',
     });
 
-    expect(state.setupState!.currentStep).toBe('factionSelection');
+    expect(state.setupState!.currentStep).toBe('loserChoosePriority');
     expect(events).toHaveLength(1);
     expect(events[0].type).toBe('priorityChosen');
   });

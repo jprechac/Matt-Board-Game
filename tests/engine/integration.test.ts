@@ -52,12 +52,20 @@ describe('integration: full game', () => {
     let state = createGame(CONFIG);
     expect(state.phase).toBe('setup');
 
-    // Choose priority
+    // Choose priority (2-step flow)
     const winner = state.currentPlayerId;
+    const loser = state.players.find(p => p.id !== winner)!.id;
     state = applyAction(state, {
       type: 'choosePriority',
       playerId: winner,
-      choice: 'pickFactionFirst',
+      orderToControl: 'factionOrder',
+      position: 'first',
+    });
+    expect(state.setupState!.currentStep).toBe('loserChoosePriority');
+    state = applyAction(state, {
+      type: 'choosePriority',
+      playerId: loser,
+      position: 'first',
     });
     expect(state.setupState!.currentStep).toBe('factionSelection');
 
@@ -207,7 +215,9 @@ describe('integration: full game', () => {
     function playToGameplay(seed: number): GameState {
       let s = createGame({ ...CONFIG, seed });
       const winner = s.currentPlayerId;
-      s = applyAction(s, { type: 'choosePriority', playerId: winner, choice: 'moveFirst' });
+      s = applyAction(s, { type: 'choosePriority', playerId: winner, orderToControl: 'moveOrder', position: 'first' });
+      const loser = s.players.find(p => p.id !== winner)!.id;
+      s = applyAction(s, { type: 'choosePriority', playerId: loser, position: 'first' });
       const factionOrder = s.setupState!.factionSelectionOrder;
       s = applyAction(s, { type: 'selectFaction', playerId: factionOrder[0], factionId: 'aztecs' });
       s = applyAction(s, { type: 'selectFaction', playerId: factionOrder[1], factionId: 'english' });

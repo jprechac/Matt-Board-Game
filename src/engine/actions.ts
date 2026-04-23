@@ -78,9 +78,18 @@ function getSetupActions(state: GameState): Action[] {
     case 'choosePriority': {
       const winner = setup.rollWinner!;
       return [
-        { type: 'choosePriority', playerId: winner, choice: 'pickFactionFirst' },
-        { type: 'choosePriority', playerId: winner, choice: 'moveFirst' },
-      ];
+        { type: 'choosePriority', playerId: winner, orderToControl: 'factionOrder', position: 'first' },
+        { type: 'choosePriority', playerId: winner, orderToControl: 'factionOrder', position: 'second' },
+        { type: 'choosePriority', playerId: winner, orderToControl: 'moveOrder', position: 'first' },
+        { type: 'choosePriority', playerId: winner, orderToControl: 'moveOrder', position: 'second' },
+      ] as Action[];
+    }
+    case 'loserChoosePriority': {
+      const loser = state.players.find(p => p.id !== setup.rollWinner)!.id;
+      return [
+        { type: 'choosePriority', playerId: loser, position: 'first' },
+        { type: 'choosePriority', playerId: loser, position: 'second' },
+      ] as Action[];
     }
     case 'factionSelection': {
       const player = setup.factionSelectionOrder[setup.currentPlayerIndex];

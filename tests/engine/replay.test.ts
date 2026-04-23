@@ -31,9 +31,13 @@ function findPlacementHex(game: RecordedGame, playerId: PlayerId): CubeCoord {
 function setupToGameplay(seed: number = 42): RecordedGame {
   let game = createRecordedGame({ boardSize: '2p', playerIds: ['player1', 'player2'], seed });
   const rollWinner = game.state.setupState!.rollWinner!;
+  const loser = rollWinner === 'player1' ? 'player2' : 'player1';
 
   game = applyRecordedAction(game, {
-    type: 'choosePriority', playerId: rollWinner, choice: 'pickFactionFirst',
+    type: 'choosePriority', playerId: rollWinner, orderToControl: 'factionOrder', position: 'first',
+  });
+  game = applyRecordedAction(game, {
+    type: 'choosePriority', playerId: loser, position: 'first',
   });
 
   const factionOrder = game.state.setupState!.factionSelectionOrder;

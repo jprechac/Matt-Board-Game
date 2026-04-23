@@ -118,6 +118,7 @@ export function resolveCombat(
   const updatedAttacker: Unit = {
     ...attacker,
     hasAttackedThisTurn: true,
+    movementUsedAtAttack: attacker.movementUsedThisTurn,
   };
 
   return {

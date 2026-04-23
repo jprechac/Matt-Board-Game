@@ -66,12 +66,24 @@ export function validateAction(
 
 function validateChoosePriority(state: GameState, action: ChoosePriorityAction): ValidationResult {
   if (state.phase !== 'setup') return { valid: false, reason: 'Not in setup phase' };
-  if (!state.setupState || state.setupState.currentStep !== 'choosePriority') {
-    return { valid: false, reason: 'Not in choosePriority step' };
+  if (!state.setupState) return { valid: false, reason: 'No setup state' };
+
+  const step = state.setupState.currentStep;
+  if (step === 'choosePriority') {
+    if (action.playerId !== state.setupState.rollWinner) {
+      return { valid: false, reason: 'Only the roll winner can choose priority' };
+    }
+    if (!action.orderToControl) {
+      return { valid: false, reason: 'Winner must specify orderToControl' };
+    }
+  } else if (step === 'loserChoosePriority') {
+    if (action.playerId === state.setupState.rollWinner) {
+      return { valid: false, reason: 'Only the loser can choose priority in this step' };
+    }
+  } else {
+    return { valid: false, reason: 'Not in a choosePriority step' };
   }
-  if (action.playerId !== state.setupState.rollWinner) {
-    return { valid: false, reason: 'Only the roll winner can choose priority' };
-  }
+
   return { valid: true };
 }
 

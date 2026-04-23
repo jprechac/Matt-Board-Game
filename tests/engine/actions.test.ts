@@ -34,9 +34,13 @@ function findPlacementHex(game: RecordedGame, playerId: PlayerId): CubeCoord {
 function setupToGameplay(seed: number = 42): RecordedGame {
   let game = createRecordedGame({ boardSize: '2p', playerIds: ['player1', 'player2'], seed });
   const rollWinner = game.state.setupState!.rollWinner!;
+  const loser = rollWinner === 'player1' ? 'player2' : 'player1';
 
   game = applyRecordedAction(game, {
-    type: 'choosePriority', playerId: rollWinner, choice: 'pickFactionFirst',
+    type: 'choosePriority', playerId: rollWinner, orderToControl: 'factionOrder', position: 'first',
+  });
+  game = applyRecordedAction(game, {
+    type: 'choosePriority', playerId: loser, position: 'first',
   });
 
   const factionOrder = game.state.setupState!.factionSelectionOrder;
@@ -161,16 +165,33 @@ describe('getAllLegalActions', () => {
     const game = createRecordedGame(config);
     const actions = getAllLegalActions(game.state);
 
-    expect(actions).toHaveLength(2);
+    expect(actions).toHaveLength(4); // 2 orders × 2 positions
+    expect(actions.every(a => a.type === 'choosePriority')).toBe(true);
+  });
+
+  it('returns loser choosePriority actions after winner chooses', () => {
+    let game = createRecordedGame(config);
+    const rollWinner = game.state.setupState!.rollWinner!;
+
+    game = applyRecordedAction(game, {
+      type: 'choosePriority', playerId: rollWinner, orderToControl: 'factionOrder', position: 'first',
+    });
+
+    const actions = getAllLegalActions(game.state);
+    expect(actions).toHaveLength(2); // 2 positions for loser
     expect(actions.every(a => a.type === 'choosePriority')).toBe(true);
   });
 
   it('returns faction selection actions after priority is chosen', () => {
     let game = createRecordedGame(config);
     const rollWinner = game.state.setupState!.rollWinner!;
+    const loser = game.state.players.find(p => p.id !== rollWinner)!.id;
 
     game = applyRecordedAction(game, {
-      type: 'choosePriority', playerId: rollWinner, choice: 'pickFactionFirst',
+      type: 'choosePriority', playerId: rollWinner, orderToControl: 'factionOrder', position: 'first',
+    });
+    game = applyRecordedAction(game, {
+      type: 'choosePriority', playerId: loser, position: 'first',
     });
 
     const actions = getAllLegalActions(game.state);
@@ -181,9 +202,13 @@ describe('getAllLegalActions', () => {
   it('returns placement actions during placement phase', () => {
     let game = createRecordedGame(config);
     const rollWinner = game.state.setupState!.rollWinner!;
+    const loser = game.state.players.find(p => p.id !== rollWinner)!.id;
 
     game = applyRecordedAction(game, {
-      type: 'choosePriority', playerId: rollWinner, choice: 'pickFactionFirst',
+      type: 'choosePriority', playerId: rollWinner, orderToControl: 'factionOrder', position: 'first',
+    });
+    game = applyRecordedAction(game, {
+      type: 'choosePriority', playerId: loser, position: 'first',
     });
     const factionOrder = game.state.setupState!.factionSelectionOrder;
     game = applyRecordedAction(game, {

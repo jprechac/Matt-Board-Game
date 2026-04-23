@@ -29,7 +29,7 @@ function formatEvent(event: GameEvent): string {
   switch (event.type) {
     case 'gameStarted': return '🎮 Game started';
     case 'rollOffResolved': return `🎲 Roll-off: ${event.winner} wins`;
-    case 'priorityChosen': return `${event.playerId} chose: ${event.choice}`;
+    case 'priorityChosen': return `${event.playerId} chose ${event.orderControlled} — ${event.position}`;
     case 'factionSelected': return `${event.playerId} picked ${event.factionId}`;
     case 'armyCompositionSet': return `${event.playerId} set army composition`;
     case 'unitPlaced': return `${event.playerId} placed ${event.unitTypeId}`;

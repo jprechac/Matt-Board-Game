@@ -18,12 +18,19 @@ const DEFAULT_CONFIG: GameConfig = {
 
 function setupToFactionSelection(seed = 42): GameState {
   let state = createGame({ ...DEFAULT_CONFIG, seed });
-  // Roll winner chooses priority
+  // Roll winner chooses priority (2-step flow)
   const winner = state.currentPlayerId;
   state = applyAction(state, {
     type: 'choosePriority',
     playerId: winner,
-    choice: 'pickFactionFirst',
+    orderToControl: 'factionOrder',
+    position: 'first',
+  });
+  const loser = state.players.find(p => p.id !== winner)!.id;
+  state = applyAction(state, {
+    type: 'choosePriority',
+    playerId: loser,
+    position: 'first',
   });
   return state;
 }
@@ -132,38 +139,107 @@ describe('createGame', () => {
 });
 
 describe('choosePriority', () => {
-  it('advances to faction selection', () => {
+  it('winner step advances to loserChoosePriority', () => {
     let state = createGame(DEFAULT_CONFIG);
     const winner = state.currentPlayerId;
     state = applyAction(state, {
       type: 'choosePriority',
       playerId: winner,
-      choice: 'pickFactionFirst',
+      orderToControl: 'factionOrder',
+      position: 'first',
+    });
+    expect(state.setupState!.currentStep).toBe('loserChoosePriority');
+    expect(state.setupState!.winnerOrderChoice).toBe('factionOrder');
+    expect(state.setupState!.winnerPosition).toBe('first');
+  });
+
+  it('full 2-step flow advances to factionSelection with correct orders', () => {
+    let state = createGame(DEFAULT_CONFIG);
+    const winner = state.currentPlayerId;
+    const loser = state.players.find(p => p.id !== winner)!.id;
+    state = applyAction(state, {
+      type: 'choosePriority',
+      playerId: winner,
+      orderToControl: 'factionOrder',
+      position: 'first',
+    });
+    state = applyAction(state, {
+      type: 'choosePriority',
+      playerId: loser,
+      position: 'first',
     });
     expect(state.setupState!.currentStep).toBe('factionSelection');
     expect(state.setupState!.factionSelectionOrder[0]).toBe(winner);
+    expect(state.setupState!.moveOrder[0]).toBe(loser);
   });
 
-  it('moveFirst gives faction pick to other player', () => {
+  it('winner choosing moveOrder first, loser picks factionOrder second', () => {
     let state = createGame(DEFAULT_CONFIG);
     const winner = state.currentPlayerId;
+    const loser = state.players.find(p => p.id !== winner)!.id;
     state = applyAction(state, {
       type: 'choosePriority',
       playerId: winner,
-      choice: 'moveFirst',
+      orderToControl: 'moveOrder',
+      position: 'first',
+    });
+    state = applyAction(state, {
+      type: 'choosePriority',
+      playerId: loser,
+      position: 'second',
     });
     expect(state.setupState!.moveOrder[0]).toBe(winner);
-    expect(state.setupState!.factionSelectionOrder[0]).not.toBe(winner);
+    expect(state.setupState!.factionSelectionOrder[1]).toBe(loser);
+    expect(state.setupState!.factionSelectionOrder[0]).toBe(winner);
   });
 
-  it('rejects non-winner choosing', () => {
+  it('winner choosing second position works correctly', () => {
+    let state = createGame(DEFAULT_CONFIG);
+    const winner = state.currentPlayerId;
+    const loser = state.players.find(p => p.id !== winner)!.id;
+    state = applyAction(state, {
+      type: 'choosePriority',
+      playerId: winner,
+      orderToControl: 'factionOrder',
+      position: 'second',
+    });
+    state = applyAction(state, {
+      type: 'choosePriority',
+      playerId: loser,
+      position: 'first',
+    });
+    // Winner picks faction second (counter-pick)
+    expect(state.setupState!.factionSelectionOrder[1]).toBe(winner);
+    expect(state.setupState!.factionSelectionOrder[0]).toBe(loser);
+    // Loser chose move first
+    expect(state.setupState!.moveOrder[0]).toBe(loser);
+  });
+
+  it('rejects non-winner in first step', () => {
     const state = createGame(DEFAULT_CONFIG);
     const nonWinner = state.players.find(p => p.id !== state.currentPlayerId)!.id;
     expect(() => applyAction(state, {
       type: 'choosePriority',
       playerId: nonWinner,
-      choice: 'pickFactionFirst',
+      orderToControl: 'factionOrder',
+      position: 'first',
     })).toThrow('roll winner');
+  });
+
+  it('rejects winner in loser step', () => {
+    let state = createGame(DEFAULT_CONFIG);
+    const winner = state.currentPlayerId;
+    state = applyAction(state, {
+      type: 'choosePriority',
+      playerId: winner,
+      orderToControl: 'factionOrder',
+      position: 'first',
+    });
+    expect(() => applyAction(state, {
+      type: 'choosePriority',
+      playerId: winner,
+      position: 'first',
+    })).toThrow('loser');
   });
 });
 
