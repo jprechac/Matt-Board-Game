@@ -89,6 +89,16 @@ export interface AttackResolvedEvent extends BaseGameEvent {
   readonly targetKilled: boolean;
 }
 
+export interface HealResolvedEvent extends BaseGameEvent {
+  readonly type: 'healResolved';
+  readonly healerId: string;
+  readonly targetId: string;
+  readonly roll: number;
+  readonly healed: boolean;
+  readonly healAmount: number;
+  readonly targetHpAfter: number;
+}
+
 export interface UnitKilledEvent extends BaseGameEvent {
   readonly type: 'unitKilled';
   readonly unitId: string;
@@ -135,6 +145,7 @@ export type GameEvent =
   | TurnEndedEvent
   | UnitMovedEvent
   | AttackResolvedEvent
+  | HealResolvedEvent
   | UnitKilledEvent
   | UnitTurnEndedEvent
   | BaseControlChangedEvent

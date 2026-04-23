@@ -3,7 +3,7 @@ import type {
   SetupState, PlayerState, Unit, ArmyComposition,
   MoveAction, AttackAction, PlaceUnitAction, EndUnitTurnAction,
   SelectFactionAction, SetArmyCompositionAction, ChoosePriorityAction,
-  SurrenderAction, WinCondition, FactionId,
+  SurrenderAction, WinCondition, FactionId, HealAction,
 } from './types.js';
 import {
   DEFAULT_ARMY_LIMITS, BASE_CONTROL_TURNS_TO_WIN,
@@ -11,10 +11,10 @@ import {
 } from './types.js';
 import type { GameEvent } from './events.js';
 import { createBoard, getBaseCells } from './board.js';
-import { hexKey } from './hex.js';
+import { hexKey, cubeDistance } from './hex.js';
 import { SeededRNG } from './rng.js';
 import { validateMove, applyMove, getAvailableMovement } from './movement.js';
-import { resolveCombat, validateAttack } from './combat.js';
+import { resolveCombat, validateAttack, resolveHeal } from './combat.js';
 import { getFaction, getUnitDef } from './data/factions/index.js';
 import { BASIC_MELEE, BASIC_RANGED } from './data/basic-units.js';
 import { getAttackModifiers, getDefenseModifiers } from './abilities/index.js';
@@ -110,6 +110,8 @@ export function applyActionDetailed(state: GameState, action: Action): ActionRes
       return applyMoveAction(state, action);
     case 'attack':
       return applyAttackAction(state, action);
+    case 'heal':
+      return applyHealAction(state, action);
     case 'endUnitTurn':
       return applyEndUnitTurn(state, action);
     case 'endTurn':
@@ -577,6 +579,73 @@ function applyAttackAction(state: GameState, action: AttackAction): ActionResult
       });
     }
   }
+
+  return { state: newState, events };
+}
+
+function applyHealAction(state: GameState, action: HealAction): ActionResult {
+  requireGameplay(state);
+  const healer = getUnit(state, action.unitId);
+  const target = getUnit(state, action.targetId);
+  requireCurrentPlayer(state, healer.playerId);
+  requireActivatable(state, healer);
+
+  // Validate healer has medic_heal ability
+  const player = state.players.find(p => p.id === healer.playerId)!;
+  const healerDef = lookupUnitDef(healer.typeId, player.factionId!);
+  if (healerDef.abilityId !== 'medic_heal') {
+    throw new Error('Unit cannot heal');
+  }
+  if (healer.hasAttackedThisTurn) throw new Error('Unit has already attacked this turn');
+  if (healer.hasUsedAbilityThisTurn) throw new Error('Unit has already used ability this turn');
+
+  // Validate target
+  if (target.currentHp <= 0) throw new Error('Target is dead');
+  if (target.playerId !== healer.playerId) throw new Error('Can only heal friendly units');
+  if (target.currentHp >= target.maxHp) throw new Error('Target is at full health');
+  if (cubeDistance(healer.position, target.position) !== 1) throw new Error('Target must be adjacent');
+
+  const params = healerDef.abilityParams ?? {};
+  const healThreshold = (params.healThreshold as number) ?? healerDef.attack.toHit;
+  const enhancedThreshold = (params.enhancedThreshold as number) ?? 8;
+  const healAmount = (params.healAmount as number) ?? 1;
+  const enhancedHealAmount = (params.enhancedHealAmount as number) ?? 2;
+
+  const rng = SeededRNG.fromState(state.rngSeed, state.rngState);
+  const result = resolveHeal(healThreshold, enhancedThreshold, healAmount, enhancedHealAmount, target, rng);
+
+  const updatedTarget: Unit = {
+    ...target,
+    currentHp: target.currentHp + result.healAmount,
+  };
+
+  const updatedHealer: Unit = {
+    ...healer,
+    hasUsedAbilityThisTurn: true,
+    hasAttackedThisTurn: true, // heal and attack are mutually exclusive
+  };
+
+  let units = replaceUnit(state.units, updatedHealer);
+  units = replaceUnit(units, updatedTarget);
+
+  const newState: GameState = {
+    ...state,
+    units,
+    rngState: rng.getState(),
+    activeUnitId: updatedHealer.id,
+  };
+
+  const events: GameEvent[] = [{
+    type: 'healResolved',
+    turnNumber: state.turnNumber,
+    playerId: healer.playerId,
+    healerId: healer.id,
+    targetId: target.id,
+    roll: result.roll,
+    healed: result.healed,
+    healAmount: result.healAmount,
+    targetHpAfter: updatedTarget.currentHp,
+  }];
 
   return { state: newState, events };
 }

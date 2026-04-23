@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import type { GameEvent } from '../../engine/events.js';
+import { formatUnitName, formatWinCondition, formatFactionName } from '../utils/formatters.js';
 
 interface EventLogProps {
   events: readonly GameEvent[];
@@ -18,6 +19,7 @@ const EVENT_COLORS: Record<string, string> = {
   turnEnded: '#94a3b8',
   unitMoved: '#3b82f6',
   attackResolved: '#ef4444',
+  healResolved: '#22c55e',
   unitKilled: '#dc2626',
   unitTurnEnded: '#64748b',
   baseControlChanged: '#fbbf24',
@@ -30,18 +32,19 @@ function formatEvent(event: GameEvent): string {
     case 'gameStarted': return '🎮 Game started';
     case 'rollOffResolved': return `🎲 Roll-off: ${event.winner} wins`;
     case 'priorityChosen': return `${event.playerId} chose ${event.orderControlled} — ${event.position}`;
-    case 'factionSelected': return `${event.playerId} picked ${event.factionId}`;
+    case 'factionSelected': return `${event.playerId} picked ${formatFactionName(event.factionId)}`;
     case 'armyCompositionSet': return `${event.playerId} set army composition`;
-    case 'unitPlaced': return `${event.playerId} placed ${event.unitTypeId}`;
+    case 'unitPlaced': return `${event.playerId} placed ${formatUnitName(event.unitTypeId)}`;
     case 'placementComplete': return '✅ Placement complete';
     case 'turnStarted': return `— Turn ${event.turnNumber}: ${event.playerId} —`;
     case 'turnEnded': return `${event.playerId} ended turn`;
     case 'unitMoved': return `Unit moved (${event.distance} hex)`;
     case 'attackResolved': return `⚔️ ${event.hit ? (event.crit ? 'CRIT!' : 'Hit') : 'Miss'} — ${event.damage} dmg`;
+    case 'healResolved': return `💚 ${event.healed ? `Healed ${event.healAmount} HP` : 'Heal failed'} (🎲${event.roll})`;
     case 'unitKilled': return `💀 Unit killed`;
     case 'unitTurnEnded': return `Unit exhausted`;
     case 'baseControlChanged': return `⚑ ${event.playerId} ${event.timerReset ? 'lost' : 'controls'} base (${event.timerValue})`;
-    case 'gameWon': return `🏆 ${event.winner} wins by ${event.winCondition}!`;
+    case 'gameWon': return `🏆 ${event.winner} wins by ${formatWinCondition(event.winCondition)}!`;
     case 'surrender': return `🏳️ ${event.playerId} surrendered`;
     default: return (event as { type: string }).type;
   }

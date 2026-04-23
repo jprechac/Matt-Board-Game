@@ -1,8 +1,9 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import type { GameState, HexCell } from '../../engine/types.js';
 import { hexKey } from '../../engine/hex.js';
 import { HexGrid } from './HexGrid.js';
 import { getPlayerColors } from '../styles/colors.js';
+import { formatUnitName } from '../utils/formatters.js';
 import type { DispatchResult } from '../hooks/useGameState.js';
 
 interface PlacementScreenProps {
@@ -19,6 +20,8 @@ export function PlacementScreen({ gameState, dispatch, lastError }: PlacementScr
   const batchMax = 2;
   const colors = getPlayerColors(placer);
 
+  const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
+
   // Count remaining by type
   const rosterCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -28,25 +31,34 @@ export function PlacementScreen({ gameState, dispatch, lastError }: PlacementScr
     return counts;
   }, [roster]);
 
-  // Highlight placement zone cells
+  const uniqueTypes = useMemo(() => Object.keys(rosterCounts), [rosterCounts]);
+
+  // Reset selection when placer changes or selected type is no longer available
+  useEffect(() => {
+    if (!selectedTypeId || !rosterCounts[selectedTypeId]) {
+      setSelectedTypeId(uniqueTypes[0] ?? null);
+    }
+  }, [placer, rosterCounts, selectedTypeId, uniqueTypes]);
+
+  // Highlight placement zone cells with player-appropriate colors
   const highlights = useMemo(() => {
     const map = new Map<string, string>();
     const cells = Object.values(gameState.board.cells);
     const occupiedKeys = new Set(gameState.units.map(u => hexKey(u.position)));
     for (const cell of cells) {
       if (cell.placementZonePlayerId === placer && !occupiedKeys.has(hexKey(cell.coord))) {
-        map.set(hexKey(cell.coord), 'rgba(59, 130, 246, 0.25)');
+        map.set(hexKey(cell.coord), colors.placement);
       }
     }
     return map;
-  }, [gameState.board.cells, gameState.units, placer]);
+  }, [gameState.board.cells, gameState.units, placer, colors.placement]);
 
   const handleCellClick = (cell: HexCell) => {
-    if (roster.length === 0) return;
+    if (!selectedTypeId || roster.length === 0) return;
     dispatch({
       type: 'placeUnit',
       playerId: placer,
-      unitTypeId: roster[0],
+      unitTypeId: selectedTypeId,
       position: cell.coord,
     });
   };
@@ -92,17 +104,26 @@ export function PlacementScreen({ gameState, dispatch, lastError }: PlacementScr
           borderRadius: '8px', fontSize: '13px',
         }}>
           <h3 style={{ fontSize: '14px', marginBottom: '8px', color: colors.text }}>
-            Unplaced Units
+            Select Unit to Place
           </h3>
           <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>
-            Next: <strong style={{ color: '#e2e8f0' }}>{roster[0] ?? 'none'}</strong>
+            Click a unit type, then click a hex
           </div>
-          {Object.entries(rosterCounts).map(([typeId, count]) => (
-            <div key={typeId} style={{
-              padding: '4px 8px', marginBottom: '4px',
-              background: '#334155', borderRadius: '4px',
-            }}>
-              {typeId} ×{count}
+          {uniqueTypes.map((typeId) => (
+            <div
+              key={typeId}
+              onClick={() => setSelectedTypeId(typeId)}
+              style={{
+                padding: '6px 10px', marginBottom: '4px',
+                background: selectedTypeId === typeId ? colors.unit : '#334155',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                border: selectedTypeId === typeId ? '1px solid #e2e8f0' : '1px solid transparent',
+                fontWeight: selectedTypeId === typeId ? 'bold' : 'normal',
+                color: selectedTypeId === typeId ? '#fff' : '#e2e8f0',
+              }}
+            >
+              {formatUnitName(typeId)} ×{rosterCounts[typeId]}
             </div>
           ))}
         </aside>

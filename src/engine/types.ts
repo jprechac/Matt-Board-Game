@@ -146,6 +146,12 @@ export interface AttackAction {
   readonly targetId: string;
 }
 
+export interface HealAction {
+  readonly type: 'heal';
+  readonly unitId: string;
+  readonly targetId: string;
+}
+
 export interface AbilityAction {
   readonly type: 'ability';
   readonly unitId: string;
@@ -203,6 +209,7 @@ export interface SurrenderAction {
 export type Action =
   | MoveAction
   | AttackAction
+  | HealAction
   | AbilityAction
   | PlaceUnitAction
   | EndUnitTurnAction

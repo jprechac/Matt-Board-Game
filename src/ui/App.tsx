@@ -11,6 +11,7 @@ import { PlacementScreen } from './components/PlacementScreen.js';
 import { useGameState } from './hooks/useGameState.js';
 import { CombatOverlay } from './components/CombatOverlay.js';
 import { createDevGameplayState } from './devSandbox.js';
+import { formatWinCondition } from './utils/formatters.js';
 
 type AppMode = 'newGame' | 'devSandbox';
 
@@ -110,6 +111,11 @@ function GameplayScreen({
         game.dispatch({ type: 'attack', unitId: game.selectedUnitId, targetId: target.id });
         return;
       }
+      const healTarget = game.unitActions.healTargets.find(t => hexKey(t.position) === key);
+      if (healTarget) {
+        game.dispatch({ type: 'heal', unitId: game.selectedUnitId, targetId: healTarget.id });
+        return;
+      }
     }
     game.deselectUnit();
   }, [game]);
@@ -118,9 +124,16 @@ function GameplayScreen({
     if (game.gameState.phase !== 'gameplay') return;
 
     if (game.selectedUnitId && game.selectedUnitId !== unit.id) {
+      // Check if it's an attack target
       const isTarget = game.unitActions.attackTargets.some(t => t.id === unit.id);
       if (isTarget) {
         game.dispatch({ type: 'attack', unitId: game.selectedUnitId, targetId: unit.id });
+        return;
+      }
+      // Check if it's a heal target
+      const isHealTarget = game.unitActions.healTargets.some(t => t.id === unit.id);
+      if (isHealTarget) {
+        game.dispatch({ type: 'heal', unitId: game.selectedUnitId, targetId: unit.id });
         return;
       }
     }
@@ -248,7 +261,7 @@ function VictoryOverlay({ gameState, recording, onExit }: {
       }}>
         <h2 style={{ fontSize: '32px', marginBottom: '12px' }}>🏆 {gameState.winner} wins!</h2>
         <p style={{ color: '#94a3b8', marginBottom: '24px', fontSize: '16px' }}>
-          Victory by {gameState.winCondition}
+          Victory by {formatWinCondition(gameState.winCondition!)}
         </p>
 
         <div style={{

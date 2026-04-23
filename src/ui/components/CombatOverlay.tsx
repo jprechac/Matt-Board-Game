@@ -18,6 +18,7 @@ interface CombatResult {
 export function CombatOverlay({ events }: CombatOverlayProps) {
   const [result, setResult] = useState<CombatResult | null>(null);
   const [visible, setVisible] = useState(false);
+  const [eventKey, setEventKey] = useState(0);
 
   useEffect(() => {
     const attackEvent = events.find(e => e.type === 'attackResolved');
@@ -32,10 +33,19 @@ export function CombatOverlay({ events }: CombatOverlayProps) {
         targetHpAfter: attackEvent.targetHpAfter,
       });
       setVisible(true);
-      const timer = setTimeout(() => setVisible(false), 2500);
-      return () => clearTimeout(timer);
+      setEventKey(k => k + 1);
+    } else {
+      // No attack event — ensure overlay is hidden
+      setVisible(false);
     }
   }, [events]);
+
+  // Auto-dismiss timer keyed to eventKey so it only resets on new attacks
+  useEffect(() => {
+    if (!visible) return;
+    const timer = setTimeout(() => setVisible(false), 2500);
+    return () => clearTimeout(timer);
+  }, [eventKey, visible]);
 
   if (!visible || !result) return null;
 
@@ -50,6 +60,7 @@ export function CombatOverlay({ events }: CombatOverlayProps) {
   return (
     <div
       data-testid="combat-overlay"
+      onClick={() => setVisible(false)}
       style={{
         position: 'fixed',
         top: '20%',
@@ -61,7 +72,7 @@ export function CombatOverlay({ events }: CombatOverlayProps) {
         background: bgColor,
         color: '#fff',
         textAlign: 'center',
-        pointerEvents: 'none',
+        cursor: 'pointer',
         boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
       }}
     >

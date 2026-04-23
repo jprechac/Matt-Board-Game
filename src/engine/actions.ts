@@ -4,7 +4,7 @@ import type {
   PlaceUnitAction, FactionId,
 } from './types.js';
 import { ALL_FACTION_IDS } from './types.js';
-import { hexKey, parseHexKey } from './hex.js';
+import { hexKey, parseHexKey, cubeDistance } from './hex.js';
 import { getReachableHexes, getTargetsInRange, getAvailableMovement } from './movement.js';
 import { getUnitDef } from './data/factions/index.js';
 import { getPlacementZoneCells } from './board.js';
@@ -15,12 +15,13 @@ import { getPlacementZoneCells } from './board.js';
 export interface UnitActions {
   readonly moves: readonly CubeCoord[];
   readonly attackTargets: readonly Unit[];
+  readonly healTargets: readonly Unit[];
   readonly canEndUnitTurn: boolean;
 }
 
 /** Get all legal actions for a specific unit. Only valid in gameplay phase. */
 export function getUnitActions(state: GameState, unitId: string): UnitActions {
-  const empty: UnitActions = { moves: [], attackTargets: [], canEndUnitTurn: false };
+  const empty: UnitActions = { moves: [], attackTargets: [], healTargets: [], canEndUnitTurn: false };
   if (state.phase !== 'gameplay' || state.winner) return empty;
 
   const unit = state.units.find(u => u.id === unitId);
@@ -44,9 +45,22 @@ export function getUnitActions(state: GameState, unitId: string): UnitActions {
     ? []
     : getTargetsInRange(unit, state.units, range);
 
+  // Heal targets: adjacent friendly units below max HP (for medic units)
+  let healTargets: Unit[] = [];
+  if (unitDef?.abilityId === 'medic_heal' && !unit.hasAttackedThisTurn && !unit.hasUsedAbilityThisTurn) {
+    healTargets = state.units.filter(u =>
+      u.currentHp > 0 &&
+      u.playerId === unit.playerId &&
+      u.id !== unit.id &&
+      u.currentHp < u.maxHp &&
+      cubeDistance(unit.position, u.position) === 1,
+    );
+  }
+
   return {
     moves,
     attackTargets,
+    healTargets,
     canEndUnitTurn: true,
   };
 }
@@ -155,6 +169,10 @@ function getGameplayActions(state: GameState): Action[] {
 
     for (const target of unitActions.attackTargets) {
       actions.push({ type: 'attack', unitId: unit.id, targetId: target.id });
+    }
+
+    for (const target of unitActions.healTargets) {
+      actions.push({ type: 'heal', unitId: unit.id, targetId: target.id });
     }
 
     if (unitActions.canEndUnitTurn) {

@@ -2,12 +2,13 @@ import type {
   GameState, Action, PlayerId,
   MoveAction, AttackAction, PlaceUnitAction,
   SelectFactionAction, SetArmyCompositionAction, ChoosePriorityAction,
-  EndUnitTurnAction,
+  EndUnitTurnAction, HealAction,
 } from './types.js';
 import { ALL_FACTION_IDS, DEFAULT_ARMY_LIMITS } from './types.js';
 import { hexKey } from './hex.js';
 import { validateMove } from './movement.js';
 import { validateAttack } from './combat.js';
+import { cubeDistance } from './hex.js';
 import { getFaction, getUnitDef } from './data/factions/index.js';
 import { BASIC_MELEE, BASIC_RANGED } from './data/basic-units.js';
 import { getPlacementZoneCells } from './board.js';
@@ -47,6 +48,8 @@ export function validateAction(
       return validateMoveAction(state, action);
     case 'attack':
       return validateAttackAction(state, action);
+    case 'heal':
+      return validateHealAction(state, action);
     case 'endUnitTurn':
       return validateEndUnitTurn(state, action);
     case 'endTurn':
@@ -199,6 +202,47 @@ function validateAttackAction(state: GameState, action: AttackAction): Validatio
   const player = state.players.find(p => p.id === attacker.playerId)!;
   const def = lookupDef(attacker.typeId, player.factionId!);
   return validateAttack(attacker, target, def.attack);
+}
+
+function validateHealAction(state: GameState, action: HealAction): ValidationResult {
+  if (state.phase !== 'gameplay') return { valid: false, reason: 'Not in gameplay phase' };
+  const healer = state.units.find(u => u.id === action.unitId);
+  if (!healer) return { valid: false, reason: 'Healer not found' };
+  if (healer.playerId !== state.currentPlayerId) {
+    return { valid: false, reason: 'Not your unit' };
+  }
+  if (healer.currentHp <= 0) return { valid: false, reason: 'Healer is dead' };
+  if (healer.activatedThisTurn) return { valid: false, reason: 'Unit already activated this turn' };
+  if (state.activeUnitId && state.activeUnitId !== healer.id) {
+    return { valid: false, reason: 'Another unit is currently active' };
+  }
+  if (healer.hasAttackedThisTurn) {
+    return { valid: false, reason: 'Unit has already attacked this turn' };
+  }
+  if (healer.hasUsedAbilityThisTurn) {
+    return { valid: false, reason: 'Unit has already used ability this turn' };
+  }
+
+  // Must have medic_heal ability
+  const player = state.players.find(p => p.id === healer.playerId)!;
+  const def = lookupDef(healer.typeId, player.factionId!);
+  if (def.abilityId !== 'medic_heal') {
+    return { valid: false, reason: 'Unit cannot heal' };
+  }
+
+  const target = state.units.find(u => u.id === action.targetId);
+  if (!target) return { valid: false, reason: 'Target not found' };
+  if (target.currentHp <= 0) return { valid: false, reason: 'Target is dead' };
+  if (target.playerId !== healer.playerId) {
+    return { valid: false, reason: 'Can only heal friendly units' };
+  }
+  if (target.currentHp >= target.maxHp) {
+    return { valid: false, reason: 'Target is at full health' };
+  }
+  if (cubeDistance(healer.position, target.position) !== 1) {
+    return { valid: false, reason: 'Target must be adjacent' };
+  }
+  return { valid: true };
 }
 
 function validateEndUnitTurn(state: GameState, action: EndUnitTurnAction): ValidationResult {

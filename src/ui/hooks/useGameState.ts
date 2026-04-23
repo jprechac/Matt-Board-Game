@@ -167,7 +167,7 @@ export function useGameState(configOrState: GameConfig | GameState) {
 
   const unitActions = useMemo(() => {
     if (!state.selectedUnitId || gameState.phase !== 'gameplay') {
-      return { moves: [] as readonly CubeCoord[], attackTargets: [] as readonly Unit[], canEndUnitTurn: false };
+      return { moves: [] as readonly CubeCoord[], attackTargets: [] as readonly Unit[], healTargets: [] as readonly Unit[], canEndUnitTurn: false };
     }
     return getUnitActions(gameState, state.selectedUnitId);
   }, [gameState, state.selectedUnitId]);
@@ -181,7 +181,10 @@ export function useGameState(configOrState: GameConfig | GameState) {
       map.set(hexKey(coord), 'rgba(59, 130, 246, 0.4)');
     }
     for (const target of unitActions.attackTargets) {
-      map.set(hexKey(target.position), 'rgba(239, 68, 68, 0.4)');
+      map.set(hexKey(target.position), 'rgba(255, 147, 73, 0.7)');
+    }
+    for (const target of unitActions.healTargets) {
+      map.set(hexKey(target.position), 'rgba(34, 197, 94, 0.5)');
     }
     return map;
   }, [state.selectedUnitId, selectedUnit, unitActions]);
