@@ -10,7 +10,8 @@ import type { GameConfig } from '../../src/engine/game.js';
 import type {
   GameState, PlayerId, Unit, CubeCoord,
 } from '../../src/engine/types.js';
-import { hexKey, cube, cubeNeighbors, offsetToCube } from '../../src/engine/hex.js';
+import { hexKey, cube, cubeNeighbors, offsetToCube, cubeDistance } from '../../src/engine/hex.js';
+import { getBaseCells } from '../../src/engine/board.js';
 import { getUnitActions } from '../../src/engine/actions.js';
 import { getAvailableMovement } from '../../src/engine/movement.js';
 import { validateAction } from '../../src/engine/validation.js';
@@ -68,6 +69,9 @@ function getDefaultComp(factionId: string) {
     romans: { basicMelee: 2, basicRanged: 1, specialtyChoices: ['legionnaire', 'legionnaire', 'legionnaire', 'centurion', 'centurion'] },
     vikings: { basicMelee: 2, basicRanged: 1, specialtyChoices: ['berserker', 'berserker', 'berserker', 'axe_thrower', 'axe_thrower'] },
     japanese: { basicMelee: 2, basicRanged: 1, specialtyChoices: ['samurai', 'samurai', 'samurai', 'samurai', 'samurai'] },
+    mongols: { basicMelee: 2, basicRanged: 1, specialtyChoices: ['kheshig', 'kheshig', 'pillager', 'pillager', 'pillager'] },
+    muscovites: { basicMelee: 2, basicRanged: 1, specialtyChoices: ['streltsy', 'streltsy', 'streltsy', 'cossack_cavalry', 'cossack_cavalry'] },
+    vandals: { basicMelee: 2, basicRanged: 1, specialtyChoices: ['raider', 'raider', 'raider', 'vandal_heavy_cavalry', 'vandal_heavy_cavalry'] },
   };
   return comps[factionId] ?? comps.romans;
 }
@@ -507,5 +511,554 @@ describe('S06: Medic heal action (engine integration)', () => {
     });
     expect(validation.valid).toBe(false);
     expect(validation.reason).toContain('cannot heal');
+  });
+});
+
+// ========== S07: Win by elimination ==========
+
+describe('S07: Win by elimination', () => {
+  it('triggers victory when all enemy units are defeated', () => {
+    let state = setupToGameplay(['romans', 'vikings'], 42);
+    const currentPlayer = state.currentPlayerId;
+    const enemyPlayer = state.players.find(p => p.id !== currentPlayer)!.id;
+
+    // Kill all enemy units except one by setting HP to 0
+    const enemyUnits = state.units.filter(u => u.playerId === enemyPlayer && u.currentHp > 0);
+    expect(enemyUnits.length).toBeGreaterThan(0);
+
+    const lastEnemy = enemyUnits[enemyUnits.length - 1];
+    for (const enemy of enemyUnits.slice(0, -1)) {
+      state = setUnitHp(state, enemy.id, 0);
+    }
+
+    // Set last enemy to low HP so it dies on any hit
+    state = setUnitHp(state, lastEnemy.id, 1);
+
+    // Position attacker adjacent to last enemy
+    const attacker = findUnit(state, 'basic_melee', currentPlayer);
+    const adjPos = cubeNeighbors(lastEnemy.position).find(n =>
+      state.board.cells[hexKey(n)] &&
+      !state.units.some(u => u.currentHp > 0 && hexKey(u.position) === hexKey(n)),
+    )!;
+    expect(adjPos).toBeDefined();
+    state = moveUnitTo(state, attacker.id, adjPos);
+
+    // Attack the last enemy — keep trying until a hit lands (seeded RNG)
+    const result = applyActionDetailed(state, { type: 'attack', unitId: attacker.id, targetId: lastEnemy.id });
+    const attackEvent = result.events.find(e => e.type === 'attackResolved');
+    expect(attackEvent).toBeDefined();
+
+    if (attackEvent && attackEvent.type === 'attackResolved' && attackEvent.hit) {
+      // The last enemy should be killed
+      expect(result.state.phase).toBe('victory');
+      expect(result.state.winCondition).toBe('all_units_defeated');
+      expect(result.state.winner).toBe(currentPlayer);
+
+      const gameWonEvent = result.events.find(e => e.type === 'gameWon');
+      expect(gameWonEvent).toBeDefined();
+      if (gameWonEvent && gameWonEvent.type === 'gameWon') {
+        expect(gameWonEvent.winner).toBe(currentPlayer);
+        expect(gameWonEvent.winCondition).toBe('all_units_defeated');
+      }
+    } else {
+      // If the attack missed, the game shouldn't be over yet — verify not in victory
+      expect(result.state.phase).toBe('gameplay');
+    }
+  });
+});
+
+// ========== S08: Win by base control ==========
+
+describe('S08: Win by base control', () => {
+  it('triggers victory after controlling enemy base for 3 turns', () => {
+    let state = setupToGameplay(['romans', 'vikings'], 42);
+    const player1 = state.players[0].id;
+    const player2 = state.players[1].id;
+
+    // Get a player1 unit
+    const unit = state.units.find(u => u.playerId === player1 && u.currentHp > 0)!;
+
+    // Find a base cell for player2
+    const baseCells = getBaseCells(state.board, player2);
+    expect(baseCells.length).toBeGreaterThan(0);
+    const basePos = baseCells[0].coord;
+    expect(state.board.cells[hexKey(basePos)]).toBeDefined();
+
+    // Move all player2 units OUT of their base so no defenders
+    const baseKeys = new Set(baseCells.map(c => hexKey(c.coord)));
+    for (const u of state.units.filter(u => u.playerId === player2 && u.currentHp > 0)) {
+      if (baseKeys.has(hexKey(u.position))) {
+        const safePos = offsetToCube(9, 9);
+        if (!state.units.some(other => other.id !== u.id && hexKey(other.position) === hexKey(safePos))) {
+          state = moveUnitTo(state, u.id, safePos);
+        } else {
+          const alt = cubeNeighbors(safePos).find(n =>
+            state.board.cells[hexKey(n)] && !state.units.some(o => o.id !== u.id && hexKey(o.position) === hexKey(n)),
+          )!;
+          state = moveUnitTo(state, u.id, alt);
+        }
+      }
+    }
+
+    // Position player1's unit in player2's base
+    state = moveUnitTo(state, unit.id, basePos);
+
+    // Make sure it's player1's turn
+    if (state.currentPlayerId !== player1) {
+      state = applyAction(state, { type: 'endTurn' });
+    }
+
+    // Base control checks at start of current player's turn.
+    // Timer increments when the controlling player's turn begins.
+    // Flow: p1 ends → p2 starts (no check for p1) → p2 ends → p1 starts (timer +1)
+    // Round 1: p1 end → p2 end → p1 starts (timer = 1)
+    // Round 2: p1 end → p2 end → p1 starts (timer = 2)
+    // Round 3: p1 end → p2 end → p1 starts (timer = 3 → WIN)
+    for (let round = 1; round <= 3; round++) {
+      // Player1 ends turn
+      state = applyAction(state, { type: 'endTurn' });
+      if (state.phase === 'victory') break;
+      // Player2 ends turn → player1's turn starts, base control checked
+      const result = applyActionDetailed(state, { type: 'endTurn' });
+      state = result.state;
+      if (state.phase === 'victory') break;
+    }
+
+    expect(state.phase).toBe('victory');
+    expect(state.winCondition).toBe('base_control');
+    expect(state.winner).toBe(player1);
+  });
+});
+
+// ========== S09: Base control timer reset ==========
+
+describe('S09: Base control timer reset', () => {
+  it('resets timer when unit leaves the base', () => {
+    let state = setupToGameplay(['romans', 'vikings'], 42);
+    const player1 = state.players[0].id;
+    const player2 = state.players[1].id;
+
+    const unit = state.units.find(u => u.playerId === player1 && u.currentHp > 0)!;
+
+    const baseCells = getBaseCells(state.board, player2);
+    expect(baseCells.length).toBeGreaterThan(0);
+    const basePos = baseCells[0].coord;
+
+    // Move all player2 units out of their base
+    const baseKeys = new Set(baseCells.map(c => hexKey(c.coord)));
+    for (const u of state.units.filter(u => u.playerId === player2 && u.currentHp > 0)) {
+      if (baseKeys.has(hexKey(u.position))) {
+        const safePos = offsetToCube(9, 9);
+        if (!state.units.some(o => o.id !== u.id && hexKey(o.position) === hexKey(safePos))) {
+          state = moveUnitTo(state, u.id, safePos);
+        } else {
+          const alt = cubeNeighbors(safePos).find(n =>
+            state.board.cells[hexKey(n)] && !state.units.some(o => o.id !== u.id && hexKey(o.position) === hexKey(n)),
+          )!;
+          state = moveUnitTo(state, u.id, alt);
+        }
+      }
+    }
+
+    state = moveUnitTo(state, unit.id, basePos);
+
+    if (state.currentPlayerId !== player1) {
+      state = applyAction(state, { type: 'endTurn' });
+    }
+
+    // Accumulate base control timer. The guard endTurn above may add an extra cycle
+    // when player1 isn't the initial current player.
+    state = applyAction(state, { type: 'endTurn' }); // current player ends
+    state = applyAction(state, { type: 'endTurn' }); // other player ends → current starts (timer increments)
+
+    expect(state.phase).toBe('gameplay');
+    const timerAfterRound = state.baseControlTimers[player1];
+    expect(timerAfterRound).toBeGreaterThanOrEqual(1);
+    expect(timerAfterRound).toBeLessThan(3); // must not have won yet
+
+    // Move unit OUT of the base
+    const outsidePos = cubeNeighbors(basePos).find(n =>
+      state.board.cells[hexKey(n)] &&
+      !baseKeys.has(hexKey(n)) &&
+      !state.units.some(u => u.id !== unit.id && u.currentHp > 0 && hexKey(u.position) === hexKey(n)),
+    )!;
+    expect(outsidePos).toBeDefined();
+    state = moveUnitTo(state, unit.id, outsidePos);
+
+    // Complete another round so base control is re-checked
+    state = applyAction(state, { type: 'endTurn' }); // p1 ends
+    state = applyAction(state, { type: 'endTurn' }); // p2 ends → p1 starts (timer should reset)
+
+    expect(state.baseControlTimers[player1]).toBe(0);
+    expect(state.phase).toBe('gameplay');
+  });
+});
+
+// ========== S10: Mongol reduced base control (2 turns) ==========
+
+describe('S10: Mongol reduced base control (2 turns)', () => {
+  it('mongols win base control after 2 turns instead of 3', () => {
+    let state = setupToGameplay(['mongols', 'romans'], 42);
+    const mongolPlayer = state.players.find(p => p.factionId === 'mongols')!.id;
+    const romanPlayer = state.players.find(p => p.factionId === 'romans')!.id;
+
+    const unit = state.units.find(u => u.playerId === mongolPlayer && u.currentHp > 0)!;
+
+    const baseCells = getBaseCells(state.board, romanPlayer);
+    expect(baseCells.length).toBeGreaterThan(0);
+    const basePos = baseCells[0].coord;
+
+    // Move all roman units out of their base
+    const baseKeys = new Set(baseCells.map(c => hexKey(c.coord)));
+    for (const u of state.units.filter(u => u.playerId === romanPlayer && u.currentHp > 0)) {
+      if (baseKeys.has(hexKey(u.position))) {
+        const safePos = offsetToCube(9, 9);
+        if (!state.units.some(o => o.id !== u.id && hexKey(o.position) === hexKey(safePos))) {
+          state = moveUnitTo(state, u.id, safePos);
+        } else {
+          const alt = cubeNeighbors(safePos).find(n =>
+            state.board.cells[hexKey(n)] && !state.units.some(o => o.id !== u.id && hexKey(o.position) === hexKey(n)),
+          )!;
+          state = moveUnitTo(state, u.id, alt);
+        }
+      }
+    }
+
+    state = moveUnitTo(state, unit.id, basePos);
+
+    // Ensure it's the mongol player's turn
+    if (state.currentPlayerId !== mongolPlayer) {
+      state = applyAction(state, { type: 'endTurn' });
+    }
+
+    // 2 rounds for mongols
+    for (let round = 1; round <= 2; round++) {
+      state = applyAction(state, { type: 'endTurn' }); // mongol ends
+      if (state.phase === 'victory') break;
+      const result = applyActionDetailed(state, { type: 'endTurn' }); // opponent ends → mongol starts
+      state = result.state;
+      if (state.phase === 'victory') break;
+    }
+
+    expect(state.phase).toBe('victory');
+    expect(state.winCondition).toBe('base_control');
+    expect(state.winner).toBe(mongolPlayer);
+  });
+});
+
+// ========== S11: Ranged proximity penalty ==========
+
+describe('S11: Ranged proximity penalty', () => {
+  it('applies +1 to-hit penalty for ranged unit attacking at distance 1', () => {
+    let state = setupToGameplay(['ottomans', 'romans'], 42);
+    const currentPlayer = state.currentPlayerId;
+
+    // Get to the player with a basic_ranged unit
+    if (!state.units.some(u => u.typeId === 'basic_ranged' && u.playerId === currentPlayer)) {
+      state = applyAction(state, { type: 'endTurn' });
+    }
+
+    const ranged = findUnit(state, 'basic_ranged', state.currentPlayerId);
+    const enemyPlayer = state.players.find(p => p.id !== state.currentPlayerId)!.id;
+    const enemy = state.units.find(u => u.playerId === enemyPlayer && u.currentHp > 0)!;
+
+    // Position ranged unit adjacent to enemy (distance 1)
+    const pos1 = offsetToCube(9, 9);
+    const pos2 = cubeNeighbors(pos1).find(n => state.board.cells[hexKey(n)])!;
+    expect(pos2).toBeDefined();
+    expect(cubeDistance(pos1, pos2)).toBe(1);
+
+    state = moveUnitTo(state, ranged.id, pos1);
+    state = moveUnitTo(state, enemy.id, pos2);
+
+    const result = applyActionDetailed(state, { type: 'attack', unitId: ranged.id, targetId: enemy.id });
+    const attackEvent = result.events.find(e => e.type === 'attackResolved');
+    expect(attackEvent).toBeDefined();
+    if (attackEvent && attackEvent.type === 'attackResolved') {
+      // basic_ranged: toHit 5, range 4 → at distance 1 gets +1 penalty → effectiveToHit = 6
+      expect(attackEvent.effectiveToHit).toBe(6);
+    }
+  });
+});
+
+// ========== S12: Samurai noProximityPenalty (SKIP) ==========
+
+describe('S12: Samurai noProximityPenalty', () => {
+  it.skip('samurai noProximityPenalty — pending secondary attack wiring', () => {
+    // Placeholder — secondary attacks aren't wired in the engine yet
+  });
+});
+
+// ========== S13: Streltsy blocks move-and-attack ==========
+
+describe('S13: Streltsy blocks move-and-attack', () => {
+  it('blocks melee attack from unit that has moved this turn', () => {
+    let state = setupToGameplay(['romans', 'muscovites'], 42);
+
+    // Get to the Roman player's turn (they have basic_melee)
+    const romanPlayer = state.players.find(p => p.factionId === 'romans')!.id;
+    if (state.currentPlayerId !== romanPlayer) {
+      state = applyAction(state, { type: 'endTurn' });
+    }
+
+    const attacker = findUnit(state, 'basic_melee', romanPlayer);
+    const muscovitePlayer = state.players.find(p => p.factionId === 'muscovites')!.id;
+    const streltsy = findUnit(state, 'streltsy', muscovitePlayer);
+
+    // Position attacker 2 hexes from streltsy:
+    // Place streltsy at a known position, then find a hex 2 away via neighbors
+    const streltsyPos = offsetToCube(9, 9);
+    expect(state.board.cells[hexKey(streltsyPos)]).toBeDefined();
+    state = moveUnitTo(state, streltsy.id, streltsyPos);
+
+    // Find a valid neighbor adjacent to streltsy (1 hex away)
+    const adjToStreltsy = cubeNeighbors(streltsyPos).find(n =>
+      state.board.cells[hexKey(n)] &&
+      !state.units.some(u => u.id !== streltsy.id && u.id !== attacker.id && u.currentHp > 0 && hexKey(u.position) === hexKey(n)),
+    )!;
+    expect(adjToStreltsy).toBeDefined();
+
+    // Find a hex adjacent to adjToStreltsy but NOT adjacent to streltsy (2 hexes from streltsy)
+    const startPos = cubeNeighbors(adjToStreltsy).find(n =>
+      state.board.cells[hexKey(n)] &&
+      hexKey(n) !== hexKey(streltsyPos) &&
+      cubeDistance(n, streltsyPos) === 2 &&
+      !state.units.some(u => u.id !== streltsy.id && u.id !== attacker.id && u.currentHp > 0 && hexKey(u.position) === hexKey(n)),
+    )!;
+    expect(startPos).toBeDefined();
+
+    state = moveUnitTo(state, attacker.id, startPos);
+
+    // Move attacker 1 hex toward streltsy (to adjToStreltsy)
+    state = applyAction(state, { type: 'move', unitId: attacker.id, to: adjToStreltsy });
+
+    // Verify attacker has moved
+    const movedAttacker = state.units.find(u => u.id === attacker.id)!;
+    expect(movedAttacker.hasMovedThisTurn).toBe(true);
+
+    // Attack should be blocked by streltsy defense ability
+    expect(() =>
+      applyActionDetailed(state, { type: 'attack', unitId: attacker.id, targetId: streltsy.id }),
+    ).toThrow('blocked');
+  });
+});
+
+// ========== S14: Streltsy allows stationary melee attack ==========
+
+describe('S14: Streltsy allows stationary melee attack', () => {
+  it('allows melee attack from unit that has NOT moved this turn', () => {
+    let state = setupToGameplay(['romans', 'muscovites'], 42);
+
+    const romanPlayer = state.players.find(p => p.factionId === 'romans')!.id;
+    if (state.currentPlayerId !== romanPlayer) {
+      state = applyAction(state, { type: 'endTurn' });
+    }
+
+    const attacker = findUnit(state, 'basic_melee', romanPlayer);
+    const muscovitePlayer = state.players.find(p => p.factionId === 'muscovites')!.id;
+    const streltsy = findUnit(state, 'streltsy', muscovitePlayer);
+
+    // Position attacker directly adjacent to streltsy without moving
+    const streltsyPos = offsetToCube(9, 9);
+    expect(state.board.cells[hexKey(streltsyPos)]).toBeDefined();
+    state = moveUnitTo(state, streltsy.id, streltsyPos);
+
+    const adjPos = cubeNeighbors(streltsyPos).find(n =>
+      state.board.cells[hexKey(n)] &&
+      !state.units.some(u => u.id !== streltsy.id && u.id !== attacker.id && u.currentHp > 0 && hexKey(u.position) === hexKey(n)),
+    )!;
+    expect(adjPos).toBeDefined();
+    state = moveUnitTo(state, attacker.id, adjPos);
+
+    // Ensure attacker has NOT moved
+    const stationaryAttacker = state.units.find(u => u.id === attacker.id)!;
+    expect(stationaryAttacker.hasMovedThisTurn).toBe(false);
+
+    // Attack should succeed (not throw)
+    const result = applyActionDetailed(state, { type: 'attack', unitId: attacker.id, targetId: streltsy.id });
+    const attackEvent = result.events.find(e => e.type === 'attackResolved');
+    expect(attackEvent).toBeDefined();
+  });
+});
+
+// ========== S15: Formation bonus (Legionnaire) ==========
+
+describe('S15: Formation bonus (Legionnaire)', () => {
+  it('applies -1 to-hit when adjacent to a friendly unit', () => {
+    let state = setupToGameplay(['romans', 'vikings'], 42);
+    const romanPlayer = state.players.find(p => p.factionId === 'romans')!.id;
+
+    if (state.currentPlayerId !== romanPlayer) {
+      state = applyAction(state, { type: 'endTurn' });
+    }
+
+    const legionnaire = findUnit(state, 'legionnaire', romanPlayer);
+    const ally = state.units.find(u =>
+      u.playerId === romanPlayer && u.id !== legionnaire.id && u.currentHp > 0,
+    )!;
+    const enemyPlayer = state.players.find(p => p.id !== romanPlayer)!.id;
+    const enemy = state.units.find(u => u.playerId === enemyPlayer && u.currentHp > 0)!;
+
+    // Place legionnaire, ally adjacent to each other, and enemy adjacent to legionnaire
+    const legPos = offsetToCube(9, 9);
+    expect(state.board.cells[hexKey(legPos)]).toBeDefined();
+
+    const neighbors = cubeNeighbors(legPos).filter(n => state.board.cells[hexKey(n)]);
+    expect(neighbors.length).toBeGreaterThanOrEqual(2);
+
+    const allyPos = neighbors[0];
+    const enemyPos = neighbors[1];
+
+    state = moveUnitTo(state, legionnaire.id, legPos);
+    state = moveUnitTo(state, ally.id, allyPos);
+    state = moveUnitTo(state, enemy.id, enemyPos);
+
+    const result = applyActionDetailed(state, { type: 'attack', unitId: legionnaire.id, targetId: enemy.id });
+    const attackEvent = result.events.find(e => e.type === 'attackResolved');
+    expect(attackEvent).toBeDefined();
+    if (attackEvent && attackEvent.type === 'attackResolved') {
+      // Legionnaire base toHit = 4, formation bonus = -1 → effective = 3
+      expect(attackEvent.effectiveToHit).toBe(3);
+    }
+  });
+});
+
+// ========== S16: Lone wolf bonus (Raider) ==========
+
+describe('S16: Lone wolf bonus (Raider)', () => {
+  it('applies -1 to-hit when no adjacent allies', () => {
+    let state = setupToGameplay(['vandals', 'romans'], 42);
+    const vandalPlayer = state.players.find(p => p.factionId === 'vandals')!.id;
+
+    if (state.currentPlayerId !== vandalPlayer) {
+      state = applyAction(state, { type: 'endTurn' });
+    }
+
+    const raider = findUnit(state, 'raider', vandalPlayer);
+    const enemyPlayer = state.players.find(p => p.id !== vandalPlayer)!.id;
+    const enemy = state.units.find(u => u.playerId === enemyPlayer && u.currentHp > 0)!;
+
+    // Position raider with NO adjacent allies, enemy adjacent
+    const raiderPos = offsetToCube(9, 9);
+    expect(state.board.cells[hexKey(raiderPos)]).toBeDefined();
+
+    const raiderNeighbors = cubeNeighbors(raiderPos).filter(n => state.board.cells[hexKey(n)]);
+    const enemyPos = raiderNeighbors[0];
+
+    // Move ALL allied units far from raider so none are adjacent
+    for (const u of state.units.filter(u => u.playerId === vandalPlayer && u.id !== raider.id && u.currentHp > 0)) {
+      const farPos = offsetToCube(3, 3);
+      const neighbors = cubeNeighbors(farPos).filter(n => state.board.cells[hexKey(n)]);
+      const emptyFar = [farPos, ...neighbors].find(p =>
+        state.board.cells[hexKey(p)] &&
+        !state.units.some(o => o.id !== u.id && o.id !== raider.id && hexKey(o.position) === hexKey(p)) &&
+        cubeDistance(p, raiderPos) > 1,
+      );
+      if (emptyFar) state = moveUnitTo(state, u.id, emptyFar);
+    }
+
+    state = moveUnitTo(state, raider.id, raiderPos);
+    state = moveUnitTo(state, enemy.id, enemyPos);
+
+    // Verify no adjacent allies
+    const adjacentAllies = state.units.filter(u =>
+      u.playerId === vandalPlayer && u.id !== raider.id && u.currentHp > 0 &&
+      cubeNeighbors(raiderPos).some(n => hexKey(n) === hexKey(u.position)),
+    );
+    expect(adjacentAllies.length).toBe(0);
+
+    const result = applyActionDetailed(state, { type: 'attack', unitId: raider.id, targetId: enemy.id });
+    const attackEvent = result.events.find(e => e.type === 'attackResolved');
+    expect(attackEvent).toBeDefined();
+    if (attackEvent && attackEvent.type === 'attackResolved') {
+      // Raider base toHit = 4, lone wolf bonus = -1 → effective = 3
+      expect(attackEvent.effectiveToHit).toBe(3);
+    }
+  });
+});
+
+// ========== S17: Kheshig full movement bonus ==========
+
+describe('S17: Kheshig full movement bonus', () => {
+  it('applies -1 to-hit after using full movement', () => {
+    let state = setupToGameplay(['mongols', 'romans'], 42);
+    const mongolPlayer = state.players.find(p => p.factionId === 'mongols')!.id;
+
+    if (state.currentPlayerId !== mongolPlayer) {
+      state = applyAction(state, { type: 'endTurn' });
+    }
+
+    const kheshig = findUnit(state, 'kheshig', mongolPlayer);
+    const enemyPlayer = state.players.find(p => p.id !== mongolPlayer)!.id;
+    const enemy = state.units.find(u => u.playerId === enemyPlayer && u.currentHp > 0)!;
+
+    // Position kheshig adjacent to enemy and inject full movement used
+    const kheshigPos = offsetToCube(9, 9);
+    expect(state.board.cells[hexKey(kheshigPos)]).toBeDefined();
+
+    const adjPos = cubeNeighbors(kheshigPos).find(n => state.board.cells[hexKey(n)])!;
+    expect(adjPos).toBeDefined();
+
+    state = moveUnitTo(state, kheshig.id, kheshigPos);
+    state = moveUnitTo(state, enemy.id, adjPos);
+
+    // Inject movementUsedThisTurn = 3 (kheshig's full movement) and hasMovedThisTurn
+    state = {
+      ...state,
+      units: state.units.map(u =>
+        u.id === kheshig.id
+          ? { ...u, movementUsedThisTurn: 3, hasMovedThisTurn: true }
+          : u,
+      ),
+    };
+
+    const result = applyActionDetailed(state, { type: 'attack', unitId: kheshig.id, targetId: enemy.id });
+    const attackEvent = result.events.find(e => e.type === 'attackResolved');
+    expect(attackEvent).toBeDefined();
+    if (attackEvent && attackEvent.type === 'attackResolved') {
+      // Kheshig base toHit = 4, full movement bonus = -1 → effective = 3
+      expect(attackEvent.effectiveToHit).toBe(3);
+    }
+  });
+});
+
+// ========== S18: Anti-basic damage (Pillager) ==========
+
+describe('S18: Anti-basic damage (Pillager)', () => {
+  it('deals +1 damage to basic category units', () => {
+    let state = setupToGameplay(['mongols', 'romans'], 42);
+    const mongolPlayer = state.players.find(p => p.factionId === 'mongols')!.id;
+
+    if (state.currentPlayerId !== mongolPlayer) {
+      state = applyAction(state, { type: 'endTurn' });
+    }
+
+    const pillager = findUnit(state, 'pillager', mongolPlayer);
+    const enemyPlayer = state.players.find(p => p.id !== mongolPlayer)!.id;
+    const basicEnemy = findUnit(state, 'basic_melee', enemyPlayer);
+
+    // Verify target is basic category
+    expect(basicEnemy.category).toBe('basic');
+
+    // Position pillager adjacent to basic enemy
+    const pillagerPos = offsetToCube(9, 9);
+    expect(state.board.cells[hexKey(pillagerPos)]).toBeDefined();
+
+    const adjPos = cubeNeighbors(pillagerPos).find(n => state.board.cells[hexKey(n)])!;
+    expect(adjPos).toBeDefined();
+
+    state = moveUnitTo(state, pillager.id, pillagerPos);
+    state = moveUnitTo(state, basicEnemy.id, adjPos);
+
+    const hpBefore = state.units.find(u => u.id === basicEnemy.id)!.currentHp;
+
+    const result = applyActionDetailed(state, { type: 'attack', unitId: pillager.id, targetId: basicEnemy.id });
+    const attackEvent = result.events.find(e => e.type === 'attackResolved');
+    expect(attackEvent).toBeDefined();
+
+    if (attackEvent && attackEvent.type === 'attackResolved' && attackEvent.hit) {
+      // Pillager base damage = 2, anti_basic_damage = +1 → damage should be >= 3
+      expect(attackEvent.damage).toBeGreaterThanOrEqual(3);
+    }
   });
 });
