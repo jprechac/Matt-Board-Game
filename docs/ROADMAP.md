@@ -119,6 +119,18 @@ src/engine/
 - [x] ~~**Missing getLegalActions API**~~ — Fixed: `getUnitActions()` + `getAllLegalActions()` added in `src/engine/actions.ts`. Needed by Phase 3 UI and Phase 4 AI.
 - [x] ~~**Missing baseControlChanged + empty serialization tests**~~ — Fixed: both test gaps from audit covered in `tests/engine/actions.test.ts`.
 - [ ] **Board visual polish** (low priority) — Placement zones and bases need more visual distinction beyond color (e.g. patterns, borders, icons). General hex grid aesthetics could be improved.
+- [ ] 🔴 **Roll-off priority choice incorrect** — Winner should choose which ORDER to control (faction selection or move order) and their position (first/second); loser gets the other order. Current engine hardcodes a 1:1 trade-off that's too restrictive. Requires new SetupStep + modified ChoosePriorityAction + UI update.
+- [ ] 🔴 **Ottoman medic can't heal** — No `heal` action type exists; `medic_heal` handler is a stub; `getUnitActions` only returns enemy targets; UI only dispatches `attack`. Needs: heal action type, handler in game.ts, `healTargets` in UnitActions, UI ally targeting.
+- [ ] 🔴 **Post-attack movement exploit** — After attacking, unit should move at most 1 hex total. But `getAvailableMovement()` recalculates remaining movement each call, allowing repeated 1-hex moves. Fix: track post-attack movement separately.
+- [ ] 🔴 **Samurai adjacency ability unclear** — `samurai_adjacency_bonus` handler may lack melee-only check, and there's no UI feedback when passive abilities activate. Need to verify handler logic + add ability trigger indicator.
+- [ ] 🟡 **Placement: player can't choose unit order** — Roster is a static list; player should select which unit to place each turn. Also, zone colors break during placement (base visuals disappear).
+- [ ] 🟡 **Combat overlay gets stuck** — "Target destroyed" popup doesn't dismiss; `useEffect` timer resets when new events arrive. Fix: use stable key per attack event.
+- [ ] 🟢 **Attack highlight color blends with red base** — Attack target hex overlay is too similar to player2's base zone color; hard to see. Use a more distinct color (bright orange, pulsing, etc.).
+- [ ] 🟢 **Display names show code IDs** — "basic_melee", "all_units_defeated" etc. shown in UI. Add `formatUnitName()` / `formatWinCondition()` helpers; title-case, no underscores.
+- [ ] 🟢 **Army selection UX** — +/- melee counter is awkward; screen mostly blank. Create reusable UnitStatCard showing full stats + ability description; use in army builder + gameplay hover/popup. Show leader info.
+- [ ] 🟢 **Auto-end turn** — When all units are exhausted (no actions remaining), auto-dispatch endTurn.
+- [ ] 🟢 **View enemy unit details** — Allow clicking enemy units to see stats in read-only UnitInfoPanel (without action highlights).
+- [ ] 🟢 **Victory text formatting** — Same display-name cleanup as above; "all_units_defeated" → "All Units Defeated".
 
 ---
 
@@ -219,6 +231,44 @@ src/engine/
 **Verification:**
 - Play a full hot-seat game, verify all rules enforced correctly
 - Verify all faction abilities work in UI
+
+---
+
+### Phase 3.5: Playtest Bug Fixes
+
+> **Status:** Not started<br>
+> **Depends on:** Phase 3<br>
+> **Must complete before:** Phase 4 (AI depends on correct engine behavior)
+
+**Goal:** Fix critical engine bugs and important UI issues found during Phase 3 playtesting.
+
+**🔴 Critical — Engine Bugs (2 chunks):**
+
+<details>
+<summary>Chunk 1: Engine Rule Fixes</summary>
+
+1. **Roll-off priority choice** — Rework `choosePriority` to a 2-step flow: winner picks which order to control (faction/move) + their position (first/second); loser picks the remaining order. New SetupStep, modified ChoosePriorityAction, UI update.
+2. **Post-attack movement exploit** — Fix `getAvailableMovement()` to track post-attack movement separately. Unit should move at most 1 hex total after attacking, not 1 hex per click.
+3. **Samurai adjacency ability** — Verify `samurai_adjacency_bonus` handler applies only to melee attacks and triggers correctly when adjacent to 2+ enemies. Add test coverage.
+
+</details>
+
+<details>
+<summary>Chunk 2: Heal Action + UI Fixes</summary>
+
+1. **Medic heal action** — Create `heal` action type, implement handler in game.ts using existing `resolveHeal`, add `healTargets` to UnitActions, update UI to dispatch heal on ally click for medic units.
+2. **Combat overlay stuck** — Fix `useEffect` dependency in CombatOverlay to use stable key per attack event, preventing timer reset on new events.
+3. **Placement roster selection** — Let player choose which unit to place (clickable roster, not static order). Fix zone coloring during placement phase.
+4. **Display name cleanup** — Add `formatDisplayName()` utility; apply to unit names, win conditions, and anywhere code IDs are shown in UI.
+5. **Attack highlight color** — Use distinct color (bright orange or pulsing) for attack targets so they don't blend with red player's base zone.
+
+</details>
+
+**🟢 QoL Backlog (defer to Phase 5 or later):**
+- Army selection UX: reusable UnitStatCard component, leader info, better layout
+- Auto-end turn when all units exhausted
+- View enemy unit details in read-only mode
+- Board visual polish (patterns, borders, icons for zones)
 
 ---
 
