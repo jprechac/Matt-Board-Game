@@ -4,10 +4,11 @@
  * Usage:
  *   npm run bot-match -- --faction1 romans --faction2 vikings --seed 42
  *   npm run bot-match -- --faction1 mongols --faction2 english --quiet
+ *   npm run bot-match -- --faction1 romans --faction2 vikings --verbose
  */
 import { createGame, applyAction } from '../engine/game.js';
 import type { GameConfig } from '../engine/game.js';
-import type { GameState, FactionId } from '../engine/types.js';
+import type { GameState, FactionId, Action } from '../engine/types.js';
 import { ALL_FACTION_IDS } from '../engine/types.js';
 import { registerAllAbilities } from '../engine/abilities/index.js';
 import { createBotForDifficulty } from '../ai/difficulty.js';
@@ -40,13 +41,54 @@ function validateFaction(name: string): FactionId {
   process.exit(1);
 }
 
+// ========== Action Formatting ==========
+
+function formatAction(action: Action, state: GameState): string {
+  const player = state.currentPlayerId;
+  switch (action.type) {
+    case 'move': {
+      const unit = state.units.find(u => u.id === action.unitId);
+      const name = unit ? `${unit.typeId}` : action.unitId;
+      return `${player} move ${name} → (${action.to.q},${action.to.r})`;
+    }
+    case 'attack': {
+      const attacker = state.units.find(u => u.id === action.unitId);
+      const target = state.units.find(u => u.id === action.targetId);
+      return `${player} attack ${attacker?.typeId ?? action.unitId} → ${target?.typeId ?? action.targetId}`;
+    }
+    case 'heal': {
+      const healer = state.units.find(u => u.id === action.unitId);
+      const target = state.units.find(u => u.id === action.targetId);
+      return `${player} heal ${healer?.typeId ?? action.unitId} → ${target?.typeId ?? action.targetId}`;
+    }
+    case 'endUnitTurn': {
+      const unit = state.units.find(u => u.id === action.unitId);
+      return `${player} end unit turn (${unit?.typeId ?? action.unitId})`;
+    }
+    case 'endTurn':
+      return `${player} end turn`;
+    case 'selectFaction':
+      return `${action.playerId} select faction: ${action.factionId}`;
+    case 'setArmyComposition':
+      return `${action.playerId} set army composition`;
+    case 'choosePriority':
+      return `${action.playerId} choose priority: ${action.orderToControl ?? 'remaining'} ${action.position}`;
+    case 'placeUnit':
+      return `${action.playerId} place ${action.unitTypeId} at (${action.position.q},${action.position.r})`;
+    case 'surrender':
+      return `${action.playerId} surrender`;
+    default:
+      return `${player} ${(action as Action).type}`;
+  }
+}
+
 // ========== Main ==========
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
 
   if (args.help) {
-    console.log('Usage: npm run bot-match -- --faction1 <faction> --faction2 <faction> [--seed <number>] [--quiet]');
+    console.log('Usage: npm run bot-match -- --faction1 <faction> --faction2 <faction> [--seed <number>] [--quiet] [--verbose]');
     console.log(`Available factions: ${ALL_FACTION_IDS.join(', ')}`);
     process.exit(0);
   }
@@ -55,6 +97,7 @@ function main() {
   const faction2 = validateFaction(args.faction2 ?? 'vikings');
   const seed = parseInt(args.seed ?? String(Date.now()), 10);
   const quiet = args.quiet === 'true';
+  const verbose = args.verbose === 'true';
 
   registerAllAbilities();
 
@@ -72,9 +115,12 @@ function main() {
   const MAX_ACTIONS = 2000;
   let actionCount = 0;
   let fallbackCount = 0;
+  let lastTurn = state.turnNumber;
+  let lastPhase = state.phase;
 
   while (!state.winner && actionCount < MAX_ACTIONS) {
     const bot = state.currentPlayerId === 'player1' ? bot1 : bot2;
+    const prevState = state;
     const result = stepBot(state, bot, state.currentPlayerId);
 
     if (!result) {
@@ -92,10 +138,25 @@ function main() {
     }
 
     if (result.fallback) fallbackCount++;
+
+    // Verbose: print phase/turn transitions and every action
+    if (verbose) {
+      if (state.phase !== lastPhase) {
+        console.log(`\n── ${state.phase.toUpperCase()} ──`);
+        lastPhase = state.phase;
+      }
+      if (state.phase === 'gameplay' && state.turnNumber !== lastTurn) {
+        console.log(`\n── Turn ${state.turnNumber} (${state.currentPlayerId}) ──`);
+        lastTurn = state.turnNumber;
+      }
+      const fb = result.fallback ? ' [FALLBACK]' : '';
+      console.log(`  #${actionCount + 1} ${formatAction(result.action, prevState)}${fb}`);
+    }
+
     state = result.nextState;
     actionCount++;
 
-    if (!quiet && state.phase === 'gameplay' && actionCount % 50 === 0) {
+    if (!quiet && !verbose && state.phase === 'gameplay' && actionCount % 50 === 0) {
       console.log(`  Turn ${state.turnNumber} | ${actionCount} actions`);
     }
   }
@@ -103,7 +164,6 @@ function main() {
   // Summary
   console.log('─'.repeat(50));
   if (state.winner) {
-    const winnerFaction = state.currentPlayerId === 'player1' ? faction1 : faction2;
     console.log(`🏆 Winner: ${state.winner} (${state.winner === 'player1' ? faction1 : faction2})`);
     console.log(`   Condition: ${state.winCondition ?? 'unknown'}`);
   } else {

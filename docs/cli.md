@@ -18,6 +18,7 @@ npm run bot-match -- --faction1 <faction> --faction2 <faction> [--seed <number>]
 | `--faction2` | No | `vikings` | Faction for Player 2 |
 | `--seed` | No | `Date.now()` | RNG seed for deterministic replay |
 | `--quiet` | No | off | Suppress progress output (only show final summary) |
+| `--verbose` | No | off | Show every action (phase transitions, turn headers, each action with details) |
 | `--help` | No | — | Show usage information |
 
 ### Available Factions
@@ -35,6 +36,9 @@ npm run bot-match -- --faction1 mongols --faction2 english --seed 42
 
 # Quiet mode — just the results
 npm run bot-match -- --faction1 aztecs --faction2 ottomans --quiet
+
+# Verbose mode — see every action
+npm run bot-match -- --faction1 romans --faction2 vikings --seed 42 --verbose
 
 # Reproduce a specific game
 npm run bot-match -- --faction1 romans --faction2 vikings --seed 12345
