@@ -108,6 +108,7 @@ You are a senior engineer implementing a chunk from the project roadmap. Follow 
 | UI Font | `Segoe UI` everywhere |
 | Dev server port | 5180 (not 5173, which is used by another project) |
 | npm installs | Use `--legacy-peer-deps` flag (React 19 conflicts) |
+| CLI tools | Live in `src/cli/`, run via `tsx`, excluded from `tsconfig.json`. Update `docs/cli.md` when adding/changing CLI commands |
 
 ## Key Files
 

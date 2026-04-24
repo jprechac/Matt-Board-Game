@@ -61,6 +61,7 @@ After a chunk is completed (by any agent or session):
 - **TypeScript strict mode** with ES2022 modules.
 - **Vitest** for testing (`npm test`).
 - **Ability system** uses a composable handler/registry pattern (`src/engine/abilities/`).
+- **CLI tools** live in `src/cli/`, run via `tsx`, and are excluded from `tsconfig.json`. When adding or modifying CLI commands, update `docs/cli.md` with usage instructions.
 
 ## Copilot Skills
 
@@ -80,4 +81,5 @@ Custom skills are in `.github/skills/`. Mention them by name in your prompt (e.g
 - `docs/core-rules.md` — Game rules (source of truth for mechanics).
 - `docs/factions/*.md` — Per-faction rules and unit stats (source of truth for abilities).
 - `src/engine/` — Pure game engine (no UI dependencies).
+- `src/cli/` — CLI tools (bot-match, future simulation runner). See `docs/cli.md`.
 - `tests/engine/` — Engine test files (mirrors `src/engine/` structure).

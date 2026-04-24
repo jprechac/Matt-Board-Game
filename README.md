@@ -39,6 +39,7 @@ Each turn, you activate all your units in any order. Every unit can **move**, **
 
 ```
 docs/
+├── cli.md                 # CLI tools usage guide
 ├── core-rules.md          # Complete game rules and mechanics
 ├── balance-testing.md     # Balance testing framework
 ├── ROADMAP.md             # Development roadmap and backlog
@@ -54,6 +55,15 @@ docs/
     ├── romans.md
     ├── vandals.md
     └── vikings.md
+```
+
+## Quick Start
+
+```bash
+npm install --legacy-peer-deps   # Install dependencies
+npm test                          # Run all tests
+npm run dev                       # Start web UI at localhost:5180
+npm run bot-match                 # Run an AI vs AI match (see docs/cli.md)
 ```
 
 ## Roadmap
