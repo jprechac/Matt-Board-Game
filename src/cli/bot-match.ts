@@ -115,8 +115,13 @@ function main() {
   const MAX_ACTIONS = 2000;
   let actionCount = 0;
   let fallbackCount = 0;
-  let lastTurn = state.turnNumber;
   let lastPhase = state.phase;
+  let lastPlayer = state.currentPlayerId;
+  let turnActionCount = 0;
+  let playerTurnNumber = 0;
+
+  // Verbose state
+  let verboseLastTurn = state.turnNumber;
 
   while (!state.winner && actionCount < MAX_ACTIONS) {
     const bot = state.currentPlayerId === 'player1' ? bot1 : bot2;
@@ -145,9 +150,9 @@ function main() {
         console.log(`\n── ${state.phase.toUpperCase()} ──`);
         lastPhase = state.phase;
       }
-      if (state.phase === 'gameplay' && state.turnNumber !== lastTurn) {
-        console.log(`\n── Turn ${state.turnNumber} (${state.currentPlayerId}) ──`);
-        lastTurn = state.turnNumber;
+      if (state.phase === 'gameplay' && state.turnNumber !== verboseLastTurn) {
+        console.log(`\n── Round ${state.turnNumber} (${state.currentPlayerId}) ──`);
+        verboseLastTurn = state.turnNumber;
       }
       const fb = result.fallback ? ' [FALLBACK]' : '';
       console.log(`  #${actionCount + 1} ${formatAction(result.action, prevState)}${fb}`);
@@ -155,9 +160,22 @@ function main() {
 
     state = result.nextState;
     actionCount++;
+    turnActionCount++;
 
-    if (!quiet && !verbose && state.phase === 'gameplay' && actionCount % 50 === 0) {
-      console.log(`  Turn ${state.turnNumber} | ${actionCount} actions`);
+    // Default: report when current player changes (each player's turn is a line)
+    if (!quiet && !verbose && state.phase === 'gameplay' && state.currentPlayerId !== lastPlayer) {
+      const faction = lastPlayer === 'player1' ? faction1 : faction2;
+      playerTurnNumber++;
+      console.log(`  Turn ${playerTurnNumber} | ${faction} (${lastPlayer}) | ${turnActionCount} actions`);
+      turnActionCount = 0;
+      lastPlayer = state.currentPlayerId;
+    }
+
+    // Track phase/player transitions for default output
+    if (!verbose && state.phase !== lastPhase) {
+      lastPhase = state.phase;
+      lastPlayer = state.currentPlayerId;
+      turnActionCount = 0;
     }
   }
 

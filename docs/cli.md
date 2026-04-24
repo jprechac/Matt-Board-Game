@@ -49,8 +49,9 @@ npm run bot-match -- --faction1 romans --faction2 vikings --seed 12345
 ```
 ⚔️  Bot Match: romans vs vikings (seed: 42)
 ──────────────────────────────────────────────────
-  Turn 2 | 50 actions
-  Turn 3 | 100 actions
+  Turn 1 | vikings (player2) | 19 actions
+  Turn 2 | romans (player1) | 21 actions
+  Turn 3 | vikings (player2) | 19 actions
   ...
 ──────────────────────────────────────────────────
 🏆 Winner: player2 (vikings)
