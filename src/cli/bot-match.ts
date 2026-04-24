@@ -9,31 +9,15 @@
  */
 import { createGame, applyAction } from '../engine/game.js';
 import type { GameConfig } from '../engine/game.js';
-import type { GameState, FactionId, Action, PlayerId, BoardSize } from '../engine/types.js';
+import type { FactionId, PlayerId, BoardSize } from '../engine/types.js';
 import { ALL_FACTION_IDS } from '../engine/types.js';
 import { registerAllAbilities } from '../engine/abilities/index.js';
 import { createBotForDifficulty } from '../ai/difficulty.js';
 import { stepBot } from '../ai/bot-runner.js';
+import { parseArgs, formatAction, advanceRound } from './format.js';
+import type { RoundTracker } from './format.js';
 
-// ========== Arg Parsing ==========
-
-function parseArgs(args: string[]) {
-  const opts: Record<string, string> = {};
-  for (let i = 0; i < args.length; i++) {
-    if (args[i].startsWith('--') && i + 1 < args.length) {
-      const key = args[i].slice(2);
-      if (!args[i + 1].startsWith('--')) {
-        opts[key] = args[i + 1];
-        i++;
-      } else {
-        opts[key] = 'true';
-      }
-    } else if (args[i].startsWith('--')) {
-      opts[args[i].slice(2)] = 'true';
-    }
-  }
-  return opts;
-}
+// ========== Main ==========
 
 function validateFaction(name: string): FactionId {
   if (ALL_FACTION_IDS.includes(name as FactionId)) return name as FactionId;
@@ -41,49 +25,6 @@ function validateFaction(name: string): FactionId {
   console.error(`Available factions: ${ALL_FACTION_IDS.join(', ')}`);
   process.exit(1);
 }
-
-// ========== Action Formatting ==========
-
-function formatAction(action: Action, state: GameState): string {
-  const player = state.currentPlayerId;
-  switch (action.type) {
-    case 'move': {
-      const unit = state.units.find(u => u.id === action.unitId);
-      const name = unit ? `${unit.typeId}` : action.unitId;
-      return `${player} move ${name} → (${action.to.q},${action.to.r})`;
-    }
-    case 'attack': {
-      const attacker = state.units.find(u => u.id === action.unitId);
-      const target = state.units.find(u => u.id === action.targetId);
-      return `${player} attack ${attacker?.typeId ?? action.unitId} → ${target?.typeId ?? action.targetId}`;
-    }
-    case 'heal': {
-      const healer = state.units.find(u => u.id === action.unitId);
-      const target = state.units.find(u => u.id === action.targetId);
-      return `${player} heal ${healer?.typeId ?? action.unitId} → ${target?.typeId ?? action.targetId}`;
-    }
-    case 'endUnitTurn': {
-      const unit = state.units.find(u => u.id === action.unitId);
-      return `${player} end unit turn (${unit?.typeId ?? action.unitId})`;
-    }
-    case 'endTurn':
-      return `${player} end turn`;
-    case 'selectFaction':
-      return `${action.playerId} select faction: ${action.factionId}`;
-    case 'setArmyComposition':
-      return `${action.playerId} set army composition`;
-    case 'choosePriority':
-      return `${action.playerId} choose priority: ${action.orderToControl ?? 'remaining'} ${action.position}`;
-    case 'placeUnit':
-      return `${action.playerId} place ${action.unitTypeId} at (${action.position.q},${action.position.r})`;
-    case 'surrender':
-      return `${action.playerId} surrender`;
-    default:
-      return `${player} ${(action as Action).type}`;
-  }
-}
-
-// ========== Main ==========
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
@@ -135,10 +76,8 @@ function main() {
   let actionCount = 0;
   let fallbackCount = 0;
   let lastPhase = state.phase;
-  let lastPlayer = state.currentPlayerId;
   let turnActionCount = 0;
-  let roundNumber = 1;
-  let turnsInRound = 0;
+  let round: RoundTracker = { roundNumber: 1, turnsInRound: 0, lastPlayer: state.currentPlayerId };
 
   // Verbose state
   let verboseLastTurn = state.turnNumber;
@@ -185,27 +124,22 @@ function main() {
     // Track phase transitions FIRST (resets tracking, suppresses stale player-change)
     if (!verbose && state.phase !== lastPhase) {
       lastPhase = state.phase;
-      lastPlayer = state.currentPlayerId;
+      round = { ...round, lastPlayer: state.currentPlayerId };
       turnActionCount = 0;
     }
     // Default: report when current player changes within same phase
-    else if (!quiet && !verbose && state.phase === 'gameplay' && state.currentPlayerId !== lastPlayer) {
-      const faction = factionOf[lastPlayer];
-      console.log(`  Turn ${roundNumber} | ${faction} (${lastPlayer}) | ${turnActionCount} actions`);
+    else if (!quiet && !verbose && state.phase === 'gameplay' && state.currentPlayerId !== round.lastPlayer) {
+      const faction = factionOf[round.lastPlayer as PlayerId];
+      console.log(`  Turn ${round.roundNumber} | ${faction} (${round.lastPlayer}) | ${turnActionCount} actions`);
       turnActionCount = 0;
-      lastPlayer = state.currentPlayerId;
-      turnsInRound++;
-      if (turnsInRound >= playerCount) {
-        roundNumber++;
-        turnsInRound = 0;
-      }
+      round = advanceRound(round, state.currentPlayerId, playerCount);
     }
   }
 
   // Print final player's turn if game ended before player switch
   if (!quiet && !verbose && state.phase === 'gameplay' && turnActionCount > 0) {
-    const faction = factionOf[lastPlayer];
-    console.log(`  Turn ${roundNumber} | ${faction} (${lastPlayer}) | ${turnActionCount} actions`);
+    const faction = factionOf[round.lastPlayer as PlayerId];
+    console.log(`  Turn ${round.roundNumber} | ${faction} (${round.lastPlayer}) | ${turnActionCount} actions`);
   }
 
   // Summary
