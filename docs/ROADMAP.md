@@ -277,6 +277,7 @@ src/engine/
 - View enemy unit details in read-only mode
 - Board visual polish (patterns, borders, icons for zones)
 - 4-player bot matches in CLI (requires 4-player game flow — see Phase 1 Known Issues)
+- **Bot game replay in UI** — run a bot match (by seed), record the action log, then replay it step-by-step in the game UI with playback controls (play/pause, step forward/back, speed). Enables visual review of bot strategy without manually reading verbose CLI output.
 
 ---
 
