@@ -85,8 +85,8 @@ You are a senior engineer implementing a chunk from the project roadmap. Follow 
 13. **Push** to remote
 
 14. **Update ROADMAP.md**:
-    - Mark chunk items with `- [x]`
-    - Add ✅ to chunk header
+    - Mark chunk items with `- [x]` (no strikethrough on line items)
+    - Add ✅ to chunk header and phase header only
     - Update phase status line
     - Add any new known issues discovered
 

@@ -109,28 +109,28 @@ src/engine/
 - Manually verify unit stats match design docs
 
 **Known Issues:**
-- [x] ~~**Streltsy defense ability**~~ — Fixed: now checks attacker's attack range, only blocks melee (range 1) move-and-attack.
+- [x] **Streltsy defense ability** — Fixed: now checks attacker's attack range, only blocks melee (range 1) move-and-attack.
 - [ ] **Vandals Heavy Cavalry** missing ability implementation — design doc says "-1 To Hit penalty if attacking a unit in melee range" but no handler exists and no `abilityId` is assigned in faction data.
 - [ ] **Stub abilities** — `priest_buff`, `upgrade_unit`, `redirect_attack`, `medic_heal`, `siege_movement_buff`, `attila_tbd` are registered but have no real logic (return `{}` or `true`). Will be filled in as terrain and active-ability actions are implemented.
 - [ ] **Ability actions** — `useAbility` action type exists in types but `applyAction` throws "not implemented". Active abilities (as opposed to passive hooks) need a handler dispatch system.
 - [ ] **4-player game flow** — Board zones are correct (2v2 teams share top/bottom bases on wider board), but game.ts setup/placement logic doesn't yet handle 4-player team mechanics (team roll-off, A→C→B→D placement order, team-based win conditions).
 - [ ] **Terrain system** — Fully stubbed; design doc says "Jordan note: I don't know how Terrain works." Blocked on rules finalization.
 - [ ] **Test coverage gaps** — `getReachableHexes()` not directly tested; combat tests use seed-hunting pattern; ~12 abilities lack dedicated tests; validation.ts gameplay validators undertested.
-- [x] ~~**Missing getLegalActions API**~~ — Fixed: `getUnitActions()` + `getAllLegalActions()` added in `src/engine/actions.ts`. Needed by Phase 3 UI and Phase 4 AI.
-- [x] ~~**Missing baseControlChanged + empty serialization tests**~~ — Fixed: both test gaps from audit covered in `tests/engine/actions.test.ts`.
+- [x] **Missing getLegalActions API** — Fixed: `getUnitActions()` + `getAllLegalActions()` added in `src/engine/actions.ts`. Needed by Phase 3 UI and Phase 4 AI.
+- [x] **Missing baseControlChanged + empty serialization tests** — Fixed: both test gaps from audit covered in `tests/engine/actions.test.ts`.
 - [ ] **Board visual polish** (low priority) — Placement zones and bases need more visual distinction beyond color (e.g. patterns, borders, icons). General hex grid aesthetics could be improved.
-- [x] ~~🔴 **Roll-off priority choice incorrect**~~ — Fixed in Phase 3.5 Chunk 1: 2-step flow with `loserChoosePriority` step.
-- [x] ~~🔴 **Ottoman medic can't heal**~~ — Fixed in Phase 3.5 Chunk 2: `HealAction` type, handler in game.ts, `healTargets` in UnitActions, UI heal targeting.
-- [x] ~~🔴 **Post-attack movement exploit**~~ — Fixed in Phase 3.5 Chunk 1: `movementUsedAtAttack` snapshot tracks post-attack movement.
-- [x] ~~🔴 **Samurai adjacency ability unclear**~~ — Fixed in Phase 3.5 Chunk 1: melee range guard added to handler.
-- [x] ~~🟡 **Placement: player can't choose unit order**~~ — Fixed in Phase 3.5 Chunk 2: clickable roster with player-appropriate zone colors.
-- [x] ~~🟡 **Combat overlay gets stuck**~~ — Fixed in Phase 3.5 Chunk 2: split useEffects, eventKey counter, click-to-dismiss.
-- [x] ~~🟢 **Attack highlight color blends with red base**~~ — Fixed in Phase 3.5 Chunk 2: bright orange highlight.
-- [x] ~~🟢 **Display names show code IDs**~~ — Fixed in Phase 3.5 Chunk 2: `formatUnitName()` / `formatWinCondition()` / `formatFactionName()`.
+- [x] 🔴 **Roll-off priority choice incorrect** — Fixed in Phase 3.5 Chunk 1: 2-step flow with `loserChoosePriority` step.
+- [x] 🔴 **Ottoman medic can't heal** — Fixed in Phase 3.5 Chunk 2: `HealAction` type, handler in game.ts, `healTargets` in UnitActions, UI heal targeting.
+- [x] 🔴 **Post-attack movement exploit** — Fixed in Phase 3.5 Chunk 1: `movementUsedAtAttack` snapshot tracks post-attack movement.
+- [x] 🔴 **Samurai adjacency ability unclear** — Fixed in Phase 3.5 Chunk 1: melee range guard added to handler.
+- [x] 🟡 **Placement: player can't choose unit order** — Fixed in Phase 3.5 Chunk 2: clickable roster with player-appropriate zone colors.
+- [x] 🟡 **Combat overlay gets stuck** — Fixed in Phase 3.5 Chunk 2: split useEffects, eventKey counter, click-to-dismiss.
+- [x] 🟢 **Attack highlight color blends with red base** — Fixed in Phase 3.5 Chunk 2: bright orange highlight.
+- [x] 🟢 **Display names show code IDs** — Fixed in Phase 3.5 Chunk 2: `formatUnitName()` / `formatWinCondition()` / `formatFactionName()`.
 - [ ] 🟢 **Army selection UX** — +/- melee counter is awkward; screen mostly blank. Create reusable UnitStatCard showing full stats + ability description; use in army builder + gameplay hover/popup. Show leader info.
 - [ ] 🟢 **Auto-end turn** — When all units are exhausted (no actions remaining), auto-dispatch endTurn.
 - [ ] 🟢 **View enemy unit details** — Allow clicking enemy units to see stats in read-only UnitInfoPanel (without action highlights).
-- [x] ~~🟢 **Victory text formatting**~~ — Fixed in Phase 3.5 Chunk 2: same `formatWinCondition()` utility.
+- [x] 🟢 **Victory text formatting** — Fixed in Phase 3.5 Chunk 2: same `formatWinCondition()` utility.
 
 ---
 
@@ -247,9 +247,9 @@ src/engine/
 <details>
 <summary>✅ Chunk 1: Engine Rule Fixes (Complete)</summary>
 
-1. ~~**Roll-off priority choice**~~ — Reworked to 2-step flow: winner picks order to control + position; loser picks remaining. New `loserChoosePriority` SetupStep.
-2. ~~**Post-attack movement exploit**~~ — Fixed with `movementUsedAtAttack` snapshot in combat.ts. Movement capped correctly after attacking.
-3. ~~**Samurai adjacency ability**~~ — Added melee range guard in handler. Returns empty modifiers for non-adjacent attacks.
+1. **Roll-off priority choice** — Reworked to 2-step flow: winner picks order to control + position; loser picks remaining. New `loserChoosePriority` SetupStep.
+2. **Post-attack movement exploit** — Fixed with `movementUsedAtAttack` snapshot in combat.ts. Movement capped correctly after attacking.
+3. **Samurai adjacency ability** — Added melee range guard in handler. Returns empty modifiers for non-adjacent attacks.
 
 *22 files changed, 414 insertions, 101 deletions. 309 tests passing.*
 
@@ -286,10 +286,10 @@ src/engine/
 
 **Goal:** Create a "Medium" difficulty AI for each faction so a single player can playtest vs computer.
 
-- [x] ~~AI interface — `Bot`: given `GameState`, return `Action[]` for the turn (stateless)~~ ✅ Phase 4 Chunk 1
-- [x] ~~Evaluation heuristics — material advantage, board control, threat assessment, leader safety~~ ✅ Phase 4 Chunk 1
-- [x] ~~Generic strategy layer — target selection, movement strategy, combat decision thresholds~~ ✅ Phase 4 Chunk 1
-- [x] ~~Faction-specific tactics for all 11 factions:~~ ✅ Phase 4 Chunk 2
+- [x] AI interface — `Bot`: given `GameState`, return `Action[]` for the turn (stateless)
+- [x] Evaluation heuristics — material advantage, board control, threat assessment, leader safety
+- [x] Generic strategy layer — target selection, movement strategy, combat decision thresholds
+- [x] Faction-specific tactics for all 11 factions:
   - Aztecs: Priest positioning, Jaguar sacrifice tracking
   - Bulgars: Terrain exploitation, Khan Krum anti-terrain positioning
   - English: Arthur upgrade timing, Longbowman crit positioning
@@ -301,9 +301,9 @@ src/engine/
   - Romans: Formation maintenance (Legionnaire adjacency), Caesar redirect
   - Vandals: Lone-wolf positioning (Raider/Genseric solo bonuses)
   - Vikings: Eric double-attack targeting, Berserker aggression
-- [x] ~~Army composition selection — default "recommended" comp per faction~~ ✅ Phase 4 Chunk 1
-- [x] ~~Placement logic — ranged behind melee, leader protected~~ ✅ Phase 4 Chunk 1
-- [x] ~~"Play vs AI" mode in the web UI~~ ✅ Phase 4 Chunk 3
+- [x] Army composition selection — default "recommended" comp per faction
+- [x] Placement logic — ranged behind melee, leader protected
+- [x] "Play vs AI" mode in the web UI
 
 <details>
 <summary>Implementation chunks</summary>
