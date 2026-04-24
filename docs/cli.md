@@ -4,10 +4,10 @@ Command-line tools for running AI matches and simulations. All CLI commands use 
 
 ## Bot Match
 
-Run an AI-vs-AI match between any two factions.
+Run an AI-vs-AI match between any two factions. (4-player support is planned for a future phase.)
 
 ```bash
-npm run bot-match -- --faction1 <faction> --faction2 <faction> [--seed <number>] [--quiet]
+npm run bot-match -- --faction1 <faction> --faction2 <faction> [--seed <number>] [--quiet] [--verbose]
 ```
 
 ### Arguments
@@ -50,8 +50,9 @@ npm run bot-match -- --faction1 romans --faction2 vikings --seed 12345
 ⚔️  Bot Match: romans vs vikings (seed: 42)
 ──────────────────────────────────────────────────
   Turn 1 | vikings (player2) | 19 actions
-  Turn 2 | romans (player1) | 21 actions
-  Turn 3 | vikings (player2) | 19 actions
+  Turn 1 | romans (player1) | 21 actions
+  Turn 2 | vikings (player2) | 19 actions
+  Turn 2 | romans (player1) | 22 actions
   ...
 ──────────────────────────────────────────────────
 🏆 Winner: player2 (vikings)

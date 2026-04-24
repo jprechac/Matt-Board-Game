@@ -5,10 +5,11 @@
  *   npm run bot-match -- --faction1 romans --faction2 vikings --seed 42
  *   npm run bot-match -- --faction1 mongols --faction2 english --quiet
  *   npm run bot-match -- --faction1 romans --faction2 vikings --verbose
+ *   npm run bot-match -- --faction1 romans --faction2 vikings --faction3 mongols --faction4 english --seed 7
  */
 import { createGame, applyAction } from '../engine/game.js';
 import type { GameConfig } from '../engine/game.js';
-import type { GameState, FactionId, Action } from '../engine/types.js';
+import type { GameState, FactionId, Action, PlayerId, BoardSize } from '../engine/types.js';
 import { ALL_FACTION_IDS } from '../engine/types.js';
 import { registerAllAbilities } from '../engine/abilities/index.js';
 import { createBotForDifficulty } from '../ai/difficulty.js';
@@ -88,43 +89,62 @@ function main() {
   const args = parseArgs(process.argv.slice(2));
 
   if (args.help) {
-    console.log('Usage: npm run bot-match -- --faction1 <faction> --faction2 <faction> [--seed <number>] [--quiet] [--verbose]');
+    console.log('Usage: npm run bot-match -- --faction1 <f> --faction2 <f> [--faction3 <f> --faction4 <f>] [--seed <n>] [--quiet] [--verbose]');
     console.log(`Available factions: ${ALL_FACTION_IDS.join(', ')}`);
     process.exit(0);
   }
 
-  const faction1 = validateFaction(args.faction1 ?? 'romans');
-  const faction2 = validateFaction(args.faction2 ?? 'vikings');
+  // Build player/faction list (2 or 4 players)
+  const factions: { playerId: PlayerId; factionId: FactionId }[] = [
+    { playerId: 'player1', factionId: validateFaction(args.faction1 ?? 'romans') },
+    { playerId: 'player2', factionId: validateFaction(args.faction2 ?? 'vikings') },
+  ];
+  if (args.faction3 || args.faction4) {
+    if (!args.faction3 || !args.faction4) {
+      console.error('For a 4-player game, both --faction3 and --faction4 are required.');
+      process.exit(1);
+    }
+    console.error('4-player bot matches are not yet supported. This will be added in a future phase.');
+    process.exit(1);
+  }
+
+  const playerCount = factions.length;
+  const boardSize: BoardSize = playerCount === 4 ? '4p' : '2p';
   const seed = parseInt(args.seed ?? String(Date.now()), 10);
   const quiet = args.quiet === 'true';
   const verbose = args.verbose === 'true';
 
   registerAllAbilities();
 
-  const config: GameConfig = { boardSize: '2p', playerIds: ['player1', 'player2'], seed };
+  const playerIds = factions.map(f => f.playerId) as [PlayerId, ...PlayerId[]];
+  const config: GameConfig = { boardSize, playerIds, seed };
   let state = createGame(config);
 
-  const bot1 = createBotForDifficulty({ playerId: 'player1', difficulty: 'medium', factionId: faction1 });
-  const bot2 = createBotForDifficulty({ playerId: 'player2', difficulty: 'medium', factionId: faction2 });
+  const bots = Object.fromEntries(
+    factions.map(f => [f.playerId, createBotForDifficulty({ playerId: f.playerId, difficulty: 'medium', factionId: f.factionId })])
+  );
+  const factionOf = Object.fromEntries(factions.map(f => [f.playerId, f.factionId])) as Record<PlayerId, FactionId>;
 
   if (!quiet) {
-    console.log(`\n⚔️  Bot Match: ${faction1} vs ${faction2} (seed: ${seed})`);
+    const matchup = factions.map(f => f.factionId).join(' vs ');
+    console.log(`\n⚔️  Bot Match: ${matchup} (seed: ${seed})`);
     console.log('─'.repeat(50));
   }
 
-  const MAX_ACTIONS = 2000;
+  const MAX_ACTIONS = playerCount === 4 ? 4000 : 2000;
   let actionCount = 0;
   let fallbackCount = 0;
   let lastPhase = state.phase;
   let lastPlayer = state.currentPlayerId;
   let turnActionCount = 0;
-  let playerTurnNumber = 0;
+  let roundNumber = 1;
+  let turnsInRound = 0;
 
   // Verbose state
   let verboseLastTurn = state.turnNumber;
 
   while (!state.winner && actionCount < MAX_ACTIONS) {
-    const bot = state.currentPlayerId === 'player1' ? bot1 : bot2;
+    const bot = bots[state.currentPlayerId];
     const prevState = state;
     const result = stepBot(state, bot, state.currentPlayerId);
 
@@ -162,27 +182,30 @@ function main() {
     actionCount++;
     turnActionCount++;
 
-    // Default: report when current player changes (each player's turn is a line)
-    if (!quiet && !verbose && state.phase === 'gameplay' && state.currentPlayerId !== lastPlayer) {
-      const faction = lastPlayer === 'player1' ? faction1 : faction2;
-      playerTurnNumber++;
-      console.log(`  Turn ${playerTurnNumber} | ${faction} (${lastPlayer}) | ${turnActionCount} actions`);
-      turnActionCount = 0;
-      lastPlayer = state.currentPlayerId;
-    }
-
-    // Track phase/player transitions for default output
+    // Track phase transitions FIRST (resets tracking, suppresses stale player-change)
     if (!verbose && state.phase !== lastPhase) {
       lastPhase = state.phase;
       lastPlayer = state.currentPlayerId;
       turnActionCount = 0;
+    }
+    // Default: report when current player changes within same phase
+    else if (!quiet && !verbose && state.phase === 'gameplay' && state.currentPlayerId !== lastPlayer) {
+      const faction = factionOf[lastPlayer];
+      console.log(`  Turn ${roundNumber} | ${faction} (${lastPlayer}) | ${turnActionCount} actions`);
+      turnActionCount = 0;
+      lastPlayer = state.currentPlayerId;
+      turnsInRound++;
+      if (turnsInRound >= playerCount) {
+        roundNumber++;
+        turnsInRound = 0;
+      }
     }
   }
 
   // Summary
   console.log('─'.repeat(50));
   if (state.winner) {
-    console.log(`🏆 Winner: ${state.winner} (${state.winner === 'player1' ? faction1 : faction2})`);
+    console.log(`🏆 Winner: ${state.winner} (${factionOf[state.winner]})`);
     console.log(`   Condition: ${state.winCondition ?? 'unknown'}`);
   } else {
     console.log('⏰ Game did not finish within action limit');
@@ -193,9 +216,10 @@ function main() {
   console.log(`   Seed: ${seed}`);
 
   const alive = state.units.filter(u => u.currentHp > 0);
-  const p1Alive = alive.filter(u => u.playerId === 'player1').length;
-  const p2Alive = alive.filter(u => u.playerId === 'player2').length;
-  console.log(`   Units alive: ${faction1}=${p1Alive}, ${faction2}=${p2Alive}`);
+  for (const f of factions) {
+    const count = alive.filter(u => u.playerId === f.playerId).length;
+    console.log(`   ${f.factionId} (${f.playerId}): ${count} units alive`);
+  }
 }
 
 main();

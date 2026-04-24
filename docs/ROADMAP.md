@@ -276,6 +276,7 @@ src/engine/
 - Auto-end turn when all units exhausted
 - View enemy unit details in read-only mode
 - Board visual polish (patterns, borders, icons for zones)
+- 4-player bot matches in CLI (requires 4-player game flow — see Phase 1 Known Issues)
 
 ---
 
