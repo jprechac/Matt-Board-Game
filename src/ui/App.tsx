@@ -1,6 +1,8 @@
 import React, { useCallback, useState } from 'react';
-import type { HexCell, Unit } from '../engine/types.js';
+import type { HexCell, Unit, FactionId } from '../engine/types.js';
+import { ALL_FACTION_IDS } from '../engine/types.js';
 import type { GameConfig } from '../engine/game.js';
+import { getFaction } from '../engine/data/factions/index.js';
 import { hexKey } from '../engine/hex.js';
 import { HexGrid } from './components/HexGrid.js';
 import { UnitInfoPanel } from './components/UnitInfoPanel.js';
@@ -9,11 +11,13 @@ import { EventLog } from './components/EventLog.js';
 import { SetupScreen } from './components/SetupScreen.js';
 import { PlacementScreen } from './components/PlacementScreen.js';
 import { useGameState } from './hooks/useGameState.js';
+import { useAIPlayer } from './hooks/useAIPlayer.js';
+import type { AIPlayerConfig } from './hooks/useAIPlayer.js';
 import { CombatOverlay } from './components/CombatOverlay.js';
 import { createDevGameplayState } from './devSandbox.js';
-import { formatWinCondition } from './utils/formatters.js';
+import { formatWinCondition, formatFactionName } from './utils/formatters.js';
 
-type AppMode = 'newGame' | 'devSandbox';
+type AppMode = 'newGame' | 'vsAI' | 'devSandbox';
 
 const DEFAULT_CONFIG: GameConfig = { boardSize: '2p', playerIds: ['player1', 'player2'], seed: Date.now() };
 
@@ -21,15 +25,23 @@ export function App() {
   const [mode, setMode] = useState<AppMode | null>(null);
   const [config, setConfig] = useState<GameConfig>(DEFAULT_CONFIG);
 
+  const [aiConfig, setAIConfig] = useState<AIPlayerConfig | null>(null);
+
   if (!mode) {
     return (
       <div style={{ padding: '48px', textAlign: 'center', maxWidth: '500px', margin: '0 auto' }}>
         <h1 style={{ fontSize: '32px', fontWeight: 'bold', marginBottom: '32px' }}>Matt Board Game</h1>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <button onClick={() => setMode('newGame')} style={menuBtn('#2563eb')}>
-            New Game
+            New Game (Hot Seat)
             <span style={{ display: 'block', fontSize: '12px', color: '#93c5fd', marginTop: '4px' }}>
-              Full setup → placement → gameplay
+              Two players on the same screen
+            </span>
+          </button>
+          <button onClick={() => setMode('vsAI')} style={menuBtn('#16a34a')}>
+            Play vs AI
+            <span style={{ display: 'block', fontSize: '12px', color: '#86efac', marginTop: '4px' }}>
+              Play against a computer opponent
             </span>
           </button>
           <button onClick={() => setMode('devSandbox')} style={menuBtn('#475569')}>
@@ -44,10 +56,14 @@ export function App() {
   }
 
   if (mode === 'devSandbox') {
-    return <GameApp initialState={createDevGameplayState(42)} onExit={() => setMode(null)} />;
+    return <GameApp initialState={createDevGameplayState(42)} onExit={() => { setMode(null); setAIConfig(null); }} />;
   }
 
-  return <GameApp config={config} onExit={() => setMode(null)} />;
+  if (mode === 'vsAI' && !aiConfig) {
+    return <AISetupScreen onStart={(cfg) => { setAIConfig(cfg); }} onBack={() => setMode(null)} />;
+  }
+
+  return <GameApp config={config} aiConfig={aiConfig} onExit={() => { setMode(null); setAIConfig(null); }} />;
 }
 
 // ========== GameApp ==========
@@ -55,18 +71,21 @@ export function App() {
 interface GameAppProps {
   config?: GameConfig;
   initialState?: import('../engine/types.js').GameState;
+  aiConfig?: AIPlayerConfig | null;
   onExit: () => void;
 }
 
-function GameApp({ config, initialState, onExit }: GameAppProps) {
+function GameApp({ config, initialState, aiConfig, onExit }: GameAppProps) {
   const game = useGameState(initialState ?? config!);
   const [showCoords, setShowCoords] = useState(false);
+  const ai = useAIPlayer(game.gameState, game.dispatch, aiConfig ?? null);
 
   const phase = game.gameState.phase;
+  const isAITurn = ai.isThinking;
 
   // Setup phase
   if (phase === 'setup') {
-    return <SetupScreen gameState={game.gameState} dispatch={game.dispatch} lastError={game.lastError} />;
+    return <SetupScreen gameState={game.gameState} dispatch={game.dispatch} lastError={game.lastError} aiPlayerId={aiConfig?.playerId ?? null} />;
   }
 
   // Placement phase
@@ -80,7 +99,7 @@ function GameApp({ config, initialState, onExit }: GameAppProps) {
   }
 
   // Gameplay phase
-  return <GameplayScreen game={game} showCoords={showCoords} setShowCoords={setShowCoords} onExit={onExit} />;
+  return <GameplayScreen game={game} showCoords={showCoords} setShowCoords={setShowCoords} onExit={onExit} isAITurn={isAITurn} />;
 }
 
 // ========== Gameplay Screen ==========
@@ -90,13 +109,16 @@ function GameplayScreen({
   showCoords,
   setShowCoords,
   onExit,
+  isAITurn,
 }: {
   game: ReturnType<typeof useGameState>;
   showCoords: boolean;
   setShowCoords: (v: boolean) => void;
   onExit: () => void;
+  isAITurn: boolean;
 }) {
   const handleCellClick = useCallback((cell: HexCell) => {
+    if (isAITurn) return;
     if (game.gameState.phase !== 'gameplay') return;
     const key = hexKey(cell.coord);
 
@@ -121,6 +143,7 @@ function GameplayScreen({
   }, [game]);
 
   const handleUnitClick = useCallback((unit: Unit) => {
+    if (isAITurn) return;
     if (game.gameState.phase !== 'gameplay') return;
 
     if (game.selectedUnitId && game.selectedUnitId !== unit.id) {
@@ -154,6 +177,11 @@ function GameplayScreen({
           ← Matt Board Game
         </h1>
         <TurnIndicator gameState={game.gameState} />
+        {isAITurn && (
+          <span style={{ fontSize: '13px', color: '#fbbf24', fontWeight: 'bold', animation: 'pulse 1.5s ease-in-out infinite' }}>
+            🤖 AI is thinking…
+          </span>
+        )}
 
         <label style={{ fontSize: '12px', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
           <input type="checkbox" checked={showCoords} onChange={e => setShowCoords(e.target.checked)} />
@@ -161,19 +189,23 @@ function GameplayScreen({
         </label>
 
         <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
-          {game.canUndo && (
+          {game.canUndo && !isAITurn && (
             <button onClick={() => game.undo()} style={headerBtn}>Undo</button>
           )}
           <button
             onClick={() => {
-              if (game.selectedUnitId) game.dispatch({ type: 'endUnitTurn', unitId: game.selectedUnitId });
+              if (!isAITurn && game.selectedUnitId) game.dispatch({ type: 'endUnitTurn', unitId: game.selectedUnitId });
             }}
-            disabled={!game.selectedUnitId}
-            style={{ ...headerBtn, opacity: game.selectedUnitId ? 1 : 0.4 }}
+            disabled={isAITurn || !game.selectedUnitId}
+            style={{ ...headerBtn, opacity: (!isAITurn && game.selectedUnitId) ? 1 : 0.4 }}
           >
             End Unit Turn
           </button>
-          <button onClick={() => game.dispatch({ type: 'endTurn' })} style={headerBtn}>
+          <button
+            onClick={() => { if (!isAITurn) game.dispatch({ type: 'endTurn' }); }}
+            disabled={isAITurn}
+            style={{ ...headerBtn, opacity: isAITurn ? 0.4 : 1 }}
+          >
             End Turn
           </button>
         </div>
@@ -285,6 +317,95 @@ function VictoryOverlay({ gameState, recording, onExit }: {
 
         <button onClick={onExit} style={menuBtn('#2563eb')}>
           Play Again
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ========== AI Setup Screen ==========
+
+function AISetupScreen({ onStart, onBack }: {
+  onStart: (config: AIPlayerConfig) => void;
+  onBack: () => void;
+}) {
+  const [selectedFaction, setSelectedFaction] = useState<FactionId>('romans');
+  const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
+
+  return (
+    <div style={{ maxWidth: '600px', margin: '0 auto', padding: '32px' }}>
+      <h1 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '8px', textAlign: 'center' }}>
+        Play vs AI
+      </h1>
+      <p style={{ textAlign: 'center', color: '#94a3b8', marginBottom: '24px', fontSize: '14px' }}>
+        You are Player 1. The AI plays as Player 2.
+      </p>
+
+      {/* Difficulty */}
+      <div style={{ marginBottom: '20px' }}>
+        <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>AI Difficulty</div>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {(['easy', 'medium', 'hard'] as const).map(d => (
+            <button
+              key={d}
+              onClick={() => setDifficulty(d)}
+              style={{
+                flex: 1, padding: '10px', borderRadius: '6px',
+                border: difficulty === d ? '2px solid #3b82f6' : '1px solid #475569',
+                background: difficulty === d ? '#1e3a5f' : '#334155',
+                color: '#e2e8f0', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold',
+                textTransform: 'capitalize',
+              }}
+            >
+              {d}
+              {d === 'easy' && <span style={{ display: 'block', fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>Generic strategy</span>}
+              {d === 'medium' && <span style={{ display: 'block', fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>Faction tactics</span>}
+              {d === 'hard' && <span style={{ display: 'block', fontSize: '10px', color: '#94a3b8', marginTop: '2px' }}>Coming soon</span>}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* AI Faction */}
+      <div style={{ marginBottom: '24px' }}>
+        <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>AI Faction</div>
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
+          gap: '6px',
+        }}>
+          {ALL_FACTION_IDS.map(fid => {
+            const faction = getFaction(fid);
+            const selected = selectedFaction === fid;
+            return (
+              <button
+                key={fid}
+                onClick={() => setSelectedFaction(fid)}
+                style={{
+                  padding: '8px 6px', borderRadius: '6px',
+                  border: selected ? '2px solid #3b82f6' : '1px solid #475569',
+                  background: selected ? '#1e3a5f' : '#334155',
+                  color: '#e2e8f0', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold',
+                  textAlign: 'center',
+                }}
+              >
+                {faction.name}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: '12px' }}>
+        <button onClick={onBack} style={{ ...menuBtn('#475569'), flex: 1 }}>← Back</button>
+        <button
+          onClick={() => onStart({
+            playerId: 'player2',
+            factionId: selectedFaction,
+            difficulty,
+          })}
+          style={{ ...menuBtn('#16a34a'), flex: 2 }}
+        >
+          Start Game
         </button>
       </div>
     </div>

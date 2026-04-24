@@ -281,12 +281,12 @@ src/engine/
 
 ### Phase 4: Basic AI Bots (Medium Difficulty)
 
-> **Status:** Not started<br>
+> **Status:** ✅ Complete<br>
 > **Depends on:** Phase 1, Phase 2; UI integration depends on Phase 3 (can develop in parallel)
 
 **Goal:** Create a "Medium" difficulty AI for each faction so a single player can playtest vs computer.
 
-- [ ] AI interface — `Bot`: given `GameState`, return `Action[]` for the turn (stateless)
+- [x] ~~AI interface — `Bot`: given `GameState`, return `Action[]` for the turn (stateless)~~ ✅ Phase 4 Chunk 1
 - [x] ~~Evaluation heuristics — material advantage, board control, threat assessment, leader safety~~ ✅ Phase 4 Chunk 1
 - [x] ~~Generic strategy layer — target selection, movement strategy, combat decision thresholds~~ ✅ Phase 4 Chunk 1
 - [x] ~~Faction-specific tactics for all 11 factions:~~ ✅ Phase 4 Chunk 2
@@ -303,7 +303,7 @@ src/engine/
   - Vikings: Eric double-attack targeting, Berserker aggression
 - [x] ~~Army composition selection — default "recommended" comp per faction~~ ✅ Phase 4 Chunk 1
 - [x] ~~Placement logic — ranged behind melee, leader protected~~ ✅ Phase 4 Chunk 1
-- [ ] "Play vs AI" mode in the web UI
+- [x] ~~"Play vs AI" mode in the web UI~~ ✅ Phase 4 Chunk 3
 
 <details>
 <summary>Implementation chunks</summary>
@@ -333,13 +333,14 @@ src/engine/
 12. `src/ai/strategies/index.ts` — Strategy registry: faction → strategy mapping
 13. Tests per faction: bot plays 10 games without errors, verifies ability usage
 
-#### Chunk 3: Bot Runner + UI Integration
+#### Chunk 3: Bot Runner + UI Integration ✅ Complete
 
-1. `src/ai/bot-runner.ts` — Bot execution: generate + validate + apply actions, configurable think delay, invalid action handling
+1. `src/ai/bot-runner.ts` — Incremental `stepBot()` + `runBotTurnActions()` batch helper, validation, fallback on invalid actions
 2. `src/ai/difficulty.ts` — Difficulty wrapper: Medium = faction strategy, Easy/Hard = stubs for Phase 8
-3. UI integration: "Play vs AI" mode in setup, AI auto-executes turns with delay, visual feedback during AI turn
-4. Bot vs Bot CLI: `npm run bot-match -- --faction1 romans --faction2 vikings --seed 42` (groundwork for Phase 6)
-5. Tests: all 11 bots complete full games, varied outcomes in bot-vs-bot, "Play vs AI" e2e
+3. `src/ui/hooks/useAIPlayer.ts` — Cancellable AI turn execution hook with abort refs, delay between actions, visual feedback
+4. UI integration: "Play vs AI" menu option, AI setup screen (faction + difficulty picker), AI auto-executes turns, controls disabled during AI turn
+5. `src/cli/bot-match.ts` — Bot vs Bot CLI: `npm run bot-match -- --faction1 romans --faction2 vikings --seed 42`
+6. Tests: stepBot, runBotTurnActions, difficulty factory, all 11 factions complete games via bot runner (381 tests passing)
 
 </details>
 

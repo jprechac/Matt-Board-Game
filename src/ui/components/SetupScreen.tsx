@@ -9,9 +9,10 @@ interface SetupScreenProps {
   gameState: GameState;
   dispatch: (action: any) => DispatchResult;
   lastError: string | null;
+  aiPlayerId?: string | null;
 }
 
-export function SetupScreen({ gameState, dispatch, lastError }: SetupScreenProps) {
+export function SetupScreen({ gameState, dispatch, lastError, aiPlayerId }: SetupScreenProps) {
   const setup = gameState.setupState!;
   const step = setup.currentStep;
 
@@ -33,7 +34,7 @@ export function SetupScreen({ gameState, dispatch, lastError }: SetupScreenProps
       {step === 'choosePriority' && <ChoosePriorityStep gameState={gameState} dispatch={dispatch} />}
       {step === 'loserChoosePriority' && <LoserChoosePriorityStep gameState={gameState} dispatch={dispatch} />}
       {step === 'factionSelection' && <FactionSelectionStep gameState={gameState} dispatch={dispatch} />}
-      {step === 'armyComposition' && <ArmyCompositionStep gameState={gameState} dispatch={dispatch} />}
+      {step === 'armyComposition' && <ArmyCompositionStep gameState={gameState} dispatch={dispatch} aiPlayerId={aiPlayerId ?? null} />}
     </div>
   );
 }
@@ -193,13 +194,23 @@ function FactionSelectionStep({ gameState, dispatch }: { gameState: GameState; d
 
 // ========== Army Composition ==========
 
-function ArmyCompositionStep({ gameState, dispatch }: { gameState: GameState; dispatch: any }) {
+function ArmyCompositionStep({ gameState, dispatch, aiPlayerId }: { gameState: GameState; dispatch: any; aiPlayerId: string | null }) {
   const setup = gameState.setupState!;
   // Find a player who hasn't submitted yet
   const pendingPlayer = gameState.players.find(p => p.factionId && !p.armyComposition);
   const [handedOff, setHandedOff] = useState(false);
 
   if (!pendingPlayer) return <div style={{ textAlign: 'center', color: '#94a3b8' }}>Waiting...</div>;
+
+  // Skip handoff if this is an AI player (AI hook handles its actions)
+  const isAI = pendingPlayer.id === aiPlayerId;
+  if (isAI) {
+    return (
+      <div style={{ textAlign: 'center', padding: '24px' }}>
+        <span style={{ fontSize: '16px', color: '#fbbf24' }}>🤖 AI is choosing army composition…</span>
+      </div>
+    );
+  }
 
   // Privacy handoff screen
   if (!handedOff) {
