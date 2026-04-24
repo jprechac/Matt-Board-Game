@@ -85,11 +85,12 @@ npm run bot-match -- --faction1 romans --faction2 vikings --seed 12345
 
 ## Architecture
 
-CLI tools live in `src/cli/` and are excluded from the engine TypeScript config (`tsconfig.json`). They run via `tsx` which handles Node.js APIs and ES module resolution.
+CLI tools live in `src/cli/` and are excluded from the engine TypeScript config (`tsconfig.json`). They run via `tsx` which handles Node.js APIs and ES module resolution. Shared utilities live in `src/cli/utils/`.
 
 | File | Purpose |
 |------|---------|
 | `src/cli/bot-match.ts` | Bot vs Bot match runner |
+| `src/cli/utils/format.ts` | Shared utilities (arg parsing, action formatting, round tracking) |
 
 ### Adding New CLI Commands
 

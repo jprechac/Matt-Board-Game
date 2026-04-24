@@ -2,8 +2,8 @@
  * Tests for CLI utility functions (arg parsing, action formatting, round tracking).
  */
 import { describe, it, expect, beforeAll } from 'vitest';
-import { parseArgs, formatAction, advanceRound } from '../../src/cli/format.js';
-import type { RoundTracker } from '../../src/cli/format.js';
+import { parseArgs, formatAction, advanceRound } from '../../src/cli/utils/format.js';
+import type { RoundTracker } from '../../src/cli/utils/format.js';
 import { createGame } from '../../src/engine/game.js';
 import type { GameConfig } from '../../src/engine/game.js';
 import type { GameState, Action, UnitState } from '../../src/engine/types.js';

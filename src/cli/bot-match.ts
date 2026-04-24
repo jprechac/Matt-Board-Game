@@ -14,8 +14,8 @@ import { ALL_FACTION_IDS } from '../engine/types.js';
 import { registerAllAbilities } from '../engine/abilities/index.js';
 import { createBotForDifficulty } from '../ai/difficulty.js';
 import { stepBot } from '../ai/bot-runner.js';
-import { parseArgs, formatAction, advanceRound } from './format.js';
-import type { RoundTracker } from './format.js';
+import { parseArgs, formatAction, advanceRound } from './utils/format.js';
+import type { RoundTracker } from './utils/format.js';
 
 // ========== Main ==========
 
