@@ -202,6 +202,12 @@ function main() {
     }
   }
 
+  // Print final player's turn if game ended before player switch
+  if (!quiet && !verbose && state.phase === 'gameplay' && turnActionCount > 0) {
+    const faction = factionOf[lastPlayer];
+    console.log(`  Turn ${roundNumber} | ${faction} (${lastPlayer}) | ${turnActionCount} actions`);
+  }
+
   // Summary
   console.log('─'.repeat(50));
   if (state.winner) {
