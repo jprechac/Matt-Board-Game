@@ -69,9 +69,13 @@ const terrainHitBonus: AbilityHandler = {
 
 const upgradeUnit: AbilityHandler = {
   id: 'upgrade_unit',
-  description: 'Can upgrade one basic unit to a corresponding specialty unit before it takes damage.',
+  description: 'Can upgrade one adjacent basic unit to a corresponding specialty unit before it takes damage. Once per round.',
   canActivate(ctx, params) {
-    // TODO: Check if target is a basic unit that hasn't taken damage
+    if (ctx.unit.currentHp <= 0) return false;
+    if (ctx.unit.hasUsedAbilityThisTurn) return false;
+    const lastUsedTurn = (ctx.unit.abilityState?.lastUpgradeTurnNumber as number) ?? -1;
+    // "Once per round" — turnNumber increments once per full player cycle
+    if (ctx.state.turnNumber <= lastUsedTurn) return false;
     return true;
   },
 };
@@ -236,10 +240,9 @@ const janissaryReload: AbilityHandler = {
 const redirectAttack: AbilityHandler = {
   id: 'redirect_attack',
   description: 'Redirect one enemy attack per turn to any unit adjacent to the target.',
-  // Active/reactive ability — triggered during opponent's attack resolution
   canActivate(ctx) {
     const used = (ctx.unit.abilityState?.redirectUsedThisTurn as boolean) ?? false;
-    return !used;
+    return !used && ctx.unit.currentHp > 0;
   },
 };
 

@@ -99,6 +99,22 @@ export interface HealResolvedEvent extends BaseGameEvent {
   readonly targetHpAfter: number;
 }
 
+export interface AttackRedirectedEvent extends BaseGameEvent {
+  readonly type: 'attackRedirected';
+  readonly redirectedBy: string; // Caesar's unit ID
+  readonly originalTargetId: string;
+  readonly newTargetId: string;
+  readonly attackerId: string;
+}
+
+export interface UnitUpgradedEvent extends BaseGameEvent {
+  readonly type: 'unitUpgraded';
+  readonly upgradedBy: string; // Arthur's unit ID
+  readonly unitId: string;
+  readonly fromTypeId: string;
+  readonly toTypeId: string;
+}
+
 export interface UnitKilledEvent extends BaseGameEvent {
   readonly type: 'unitKilled';
   readonly unitId: string;
@@ -145,8 +161,10 @@ export type GameEvent =
   | TurnEndedEvent
   | UnitMovedEvent
   | AttackResolvedEvent
+  | AttackRedirectedEvent
   | HealResolvedEvent
   | UnitKilledEvent
+  | UnitUpgradedEvent
   | UnitTurnEndedEvent
   | BaseControlChangedEvent
   | GameWonEvent

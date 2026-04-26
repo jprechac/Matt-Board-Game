@@ -4,10 +4,11 @@ import type {
   PlaceUnitAction, FactionId,
 } from './types.js';
 import { ALL_FACTION_IDS } from './types.js';
-import { hexKey, parseHexKey, cubeDistance } from './hex.js';
+import { hexKey, parseHexKey, cubeDistance, cubeNeighbors } from './hex.js';
 import { getReachableHexes, getTargetsInRange, getAvailableMovement } from './movement.js';
 import { getUnitDef } from './data/factions/index.js';
 import { getPlacementZoneCells } from './board.js';
+import { getAbility } from './abilities/index.js';
 
 // ========== Unit-Level Action Queries ==========
 
@@ -16,12 +17,13 @@ export interface UnitActions {
   readonly moves: readonly CubeCoord[];
   readonly attackTargets: readonly Unit[];
   readonly healTargets: readonly Unit[];
+  readonly upgradeTargets: readonly Unit[];
   readonly canEndUnitTurn: boolean;
 }
 
 /** Get all legal actions for a specific unit. Only valid in gameplay phase. */
 export function getUnitActions(state: GameState, unitId: string): UnitActions {
-  const empty: UnitActions = { moves: [], attackTargets: [], healTargets: [], canEndUnitTurn: false };
+  const empty: UnitActions = { moves: [], attackTargets: [], healTargets: [], upgradeTargets: [], canEndUnitTurn: false };
   if (state.phase !== 'gameplay' || state.winner) return empty;
 
   const unit = state.units.find(u => u.id === unitId);
@@ -57,10 +59,28 @@ export function getUnitActions(state: GameState, unitId: string): UnitActions {
     );
   }
 
+  // Upgrade targets: adjacent basic units at full HP (for King Arthur)
+  let upgradeTargets: Unit[] = [];
+  if (unitDef?.abilityId === 'upgrade_unit' && !unit.hasUsedAbilityThisTurn) {
+    const handler = getAbility('upgrade_unit');
+    const ctx = { unit, state, allUnits: state.units };
+    if (handler?.canActivate?.(ctx)) {
+      upgradeTargets = state.units.filter(u =>
+        u.currentHp > 0 &&
+        u.playerId === unit.playerId &&
+        u.id !== unit.id &&
+        u.category === 'basic' &&
+        u.currentHp >= u.maxHp &&
+        cubeDistance(unit.position, u.position) === 1,
+      );
+    }
+  }
+
   return {
     moves,
     attackTargets,
     healTargets,
+    upgradeTargets,
     canEndUnitTurn: true,
   };
 }
@@ -173,6 +193,15 @@ function getGameplayActions(state: GameState): Action[] {
 
     for (const target of unitActions.healTargets) {
       actions.push({ type: 'heal', unitId: unit.id, targetId: target.id });
+    }
+
+    for (const target of unitActions.upgradeTargets) {
+      actions.push({
+        type: 'ability',
+        unitId: unit.id,
+        abilityId: 'upgrade_unit',
+        params: { targetId: target.id },
+      });
     }
 
     if (unitActions.canEndUnitTurn) {

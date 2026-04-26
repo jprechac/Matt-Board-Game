@@ -3,7 +3,7 @@ import type {
   SetupState, PlayerState, Unit, ArmyComposition,
   MoveAction, AttackAction, PlaceUnitAction, EndUnitTurnAction,
   SelectFactionAction, SetArmyCompositionAction, ChoosePriorityAction,
-  SurrenderAction, WinCondition, FactionId, HealAction,
+  SurrenderAction, WinCondition, FactionId, HealAction, AbilityAction,
 } from './types.js';
 import {
   DEFAULT_ARMY_LIMITS, BASE_CONTROL_TURNS_TO_WIN,
@@ -11,13 +11,13 @@ import {
 } from './types.js';
 import type { GameEvent } from './events.js';
 import { createBoard, getBaseCells } from './board.js';
-import { hexKey, cubeDistance } from './hex.js';
+import { hexKey, cubeDistance, cubeNeighbors } from './hex.js';
 import { SeededRNG } from './rng.js';
 import { validateMove, applyMove, getAvailableMovement } from './movement.js';
-import { resolveCombat, validateAttack, resolveHeal } from './combat.js';
+import { resolveCombat, resolveAttack, validateAttack, resolveHeal } from './combat.js';
 import { getFaction, getUnitDef } from './data/factions/index.js';
 import { BASIC_MELEE, BASIC_RANGED } from './data/basic-units.js';
-import { getAttackModifiers, getDefenseModifiers } from './abilities/index.js';
+import { getAttackModifiers, getDefenseModifiers, getAbility } from './abilities/index.js';
 
 // ========== Game Configuration ==========
 
@@ -119,7 +119,7 @@ export function applyActionDetailed(state: GameState, action: Action): ActionRes
     case 'surrender':
       return applySurrender(state, action);
     case 'ability':
-      throw new Error('Ability actions not yet implemented in game flow');
+      return applyAbilityAction(state, action);
     case 'placeTerrain':
       throw new Error('Terrain placement not yet implemented');
     default:
@@ -496,7 +496,7 @@ function applyMoveAction(state: GameState, action: MoveAction): ActionResult {
 function applyAttackAction(state: GameState, action: AttackAction): ActionResult {
   requireGameplay(state);
   const attacker = getUnit(state, action.unitId);
-  const target = getUnit(state, action.targetId);
+  const originalTarget = getUnit(state, action.targetId);
   requireCurrentPlayer(state, attacker.playerId);
   requireActivatable(state, attacker);
 
@@ -505,13 +505,13 @@ function applyAttackAction(state: GameState, action: AttackAction): ActionResult
   const attackerDef = lookupUnitDef(attacker.typeId, player.factionId!);
   const profile = attackerDef.attack;
 
-  const attackValidation = validateAttack(attacker, target, profile);
+  const attackValidation = validateAttack(attacker, originalTarget, profile);
   if (!attackValidation.valid) throw new Error(attackValidation.reason!);
 
   // Get ability modifiers
   const attackCtx = { unit: attacker, state, allUnits: state.units };
-  const defenseCtx = { unit: target, state, allUnits: state.units };
-  const attackMods = getAttackModifiers(attackCtx, target);
+  const defenseCtx = { unit: originalTarget, state, allUnits: state.units };
+  const attackMods = getAttackModifiers(attackCtx, originalTarget);
   const defenseMods = getDefenseModifiers(defenseCtx, attacker);
 
   if (defenseMods.blockAttack) {
@@ -526,13 +526,50 @@ function applyAttackAction(state: GameState, action: AttackAction): ActionResult
   const toHitMod = (attackMods.toHitModifier ?? 0) + (defenseMods.toHitModifier ?? 0);
   const damageMod = (attackMods.damageModifier ?? 0) + (defenseMods.damageModifier ?? 0);
 
-  const combat = resolveCombat(attacker, target, effectiveProfile, rng, toHitMod, damageMod);
+  // Roll the attack (separate from applying damage, to allow redirect)
+  const rollResult = resolveAttack(effectiveProfile, attacker.position, originalTarget.position, rng, toHitMod, damageMod);
 
-  let updatedAttacker = ensureActivated(combat.updatedAttacker);
-  const updatedTarget = combat.updatedTarget;
+  // Check for Caesar's redirect_attack ability
+  const redirectResult = tryRedirectAttack(state, attacker, originalTarget, profile.range);
+  let actualTarget = originalTarget;
+  const events: GameEvent[] = [];
+
+  if (redirectResult && rollResult.hit) {
+    actualTarget = redirectResult.newTarget;
+    events.push({
+      type: 'attackRedirected',
+      turnNumber: state.turnNumber,
+      playerId: originalTarget.playerId,
+      redirectedBy: redirectResult.caesarId,
+      originalTargetId: originalTarget.id,
+      newTargetId: actualTarget.id,
+      attackerId: attacker.id,
+    });
+  }
+
+  // Apply damage to the actual target
+  const newTargetHp = Math.max(0, actualTarget.currentHp - rollResult.damage);
+  const updatedTarget: Unit = { ...actualTarget, currentHp: newTargetHp };
+  const targetKilled = newTargetHp <= 0;
+
+  let updatedAttacker = ensureActivated({
+    ...attacker,
+    hasAttackedThisTurn: true,
+    movementUsedAtAttack: attacker.movementUsedThisTurn,
+  });
 
   let units = replaceUnit(state.units, updatedAttacker);
   units = replaceUnit(units, updatedTarget);
+
+  // Mark Caesar's redirect as used this turn
+  if (redirectResult && rollResult.hit) {
+    const caesar = units.find(u => u.id === redirectResult.caesarId)!;
+    const updatedCaesar: Unit = {
+      ...caesar,
+      abilityState: { ...caesar.abilityState, redirectUsedThisTurn: true },
+    };
+    units = replaceUnit(units, updatedCaesar);
+  }
 
   let newState: GameState = {
     ...state,
@@ -541,33 +578,33 @@ function applyAttackAction(state: GameState, action: AttackAction): ActionResult
     activeUnitId: updatedAttacker.id,
   };
 
-  const events: GameEvent[] = [{
+  events.push({
     type: 'attackResolved',
     turnNumber: state.turnNumber,
     playerId: attacker.playerId,
     attackerId: attacker.id,
-    targetId: target.id,
-    roll: combat.attack.roll,
-    effectiveToHit: combat.attack.effectiveToHit,
-    hit: combat.attack.hit,
-    crit: combat.attack.crit,
-    damage: combat.attack.damage,
+    targetId: actualTarget.id,
+    roll: rollResult.roll,
+    effectiveToHit: rollResult.effectiveToHit,
+    hit: rollResult.hit,
+    crit: rollResult.crit,
+    damage: rollResult.damage,
     targetHpAfter: updatedTarget.currentHp,
-    targetKilled: combat.targetKilled,
-  }];
+    targetKilled,
+  });
 
-  if (combat.targetKilled) {
+  if (targetKilled) {
     events.push({
       type: 'unitKilled',
       turnNumber: state.turnNumber,
-      playerId: target.playerId,
-      unitId: target.id,
+      playerId: actualTarget.playerId,
+      unitId: actualTarget.id,
       killedBy: attacker.id,
     });
   }
 
   // Check immediate win: all enemy units defeated
-  if (combat.targetKilled) {
+  if (targetKilled) {
     const winCheck = checkAllUnitsDefeated(newState);
     if (winCheck) {
       newState = { ...newState, ...winCheck };
@@ -581,6 +618,60 @@ function applyAttackAction(state: GameState, action: AttackAction): ActionResult
   }
 
   return { state: newState, events };
+}
+
+/**
+ * Check if the defending player has a living Caesar with unused redirect.
+ * Returns the redirect target if applicable, null otherwise.
+ * Melee attacks: Roman-favorable heuristic (highest HP ally adjacent to target).
+ * Ranged attacks: Attacker-favorable heuristic (lowest HP ally adjacent to target).
+ */
+function tryRedirectAttack(
+  state: GameState,
+  attacker: Unit,
+  target: Unit,
+  attackRange: number,
+): { newTarget: Unit; caesarId: string } | null {
+  // Find a living Caesar on the defending side with unused redirect
+  const caesar = state.units.find(u =>
+    u.playerId === target.playerId &&
+    u.currentHp > 0 &&
+    (u.abilityState?.abilityId as string) === 'redirect_attack' &&
+    !(u.abilityState?.redirectUsedThisTurn as boolean),
+  );
+  if (!caesar) return null;
+
+  // Check canActivate
+  const handler = getAbility('redirect_attack');
+  if (!handler?.canActivate) return null;
+  const ctx = { unit: caesar, state, allUnits: state.units };
+  if (!handler.canActivate(ctx)) return null;
+
+  // Find valid redirect targets: allies adjacent to the original target (not the target itself)
+  const targetNeighbors = cubeNeighbors(target.position);
+  const adjacentAllies = state.units.filter(u =>
+    u.currentHp > 0 &&
+    u.playerId === target.playerId &&
+    u.id !== target.id &&
+    targetNeighbors.some(n => hexKey(n) === hexKey(u.position)),
+  );
+  if (adjacentAllies.length === 0) return null;
+
+  // Select redirect target based on attack type
+  let redirectTarget: Unit;
+  if (attackRange <= 1) {
+    // Melee: Roman player chooses → highest HP ally (minimize risk)
+    redirectTarget = adjacentAllies.reduce((best, u) =>
+      u.currentHp > best.currentHp ? u : best,
+    );
+  } else {
+    // Ranged: attacking player chooses → lowest HP ally (maximize damage)
+    redirectTarget = adjacentAllies.reduce((best, u) =>
+      u.currentHp < best.currentHp ? u : best,
+    );
+  }
+
+  return { newTarget: redirectTarget, caesarId: caesar.id };
 }
 
 function applyHealAction(state: GameState, action: HealAction): ActionResult {
@@ -650,6 +741,103 @@ function applyHealAction(state: GameState, action: HealAction): ActionResult {
   return { state: newState, events };
 }
 
+// ========== Upgrade Unit Ability (King Arthur) ==========
+
+/** Upgrade mapping: basic type → specialty type for the English faction */
+const UPGRADE_MAP: Record<string, string> = {
+  basic_melee: 'knight',
+  basic_ranged: 'longbowman',
+};
+
+function applyAbilityAction(state: GameState, action: AbilityAction): ActionResult {
+  if (action.abilityId === 'upgrade_unit') {
+    return applyUpgradeAbility(state, action);
+  }
+  throw new Error(`Ability action not implemented: ${action.abilityId}`);
+}
+
+function applyUpgradeAbility(state: GameState, action: AbilityAction): ActionResult {
+  requireGameplay(state);
+  const arthur = getUnit(state, action.unitId);
+  requireCurrentPlayer(state, arthur.playerId);
+  requireActivatable(state, arthur);
+
+  const player = state.players.find(p => p.id === arthur.playerId)!;
+  const arthurDef = lookupUnitDef(arthur.typeId, player.factionId!);
+  if (arthurDef.abilityId !== 'upgrade_unit') {
+    throw new Error('Unit does not have upgrade ability');
+  }
+  if (arthur.hasUsedAbilityThisTurn) throw new Error('Ability already used this turn');
+
+  // Check once-per-round cooldown
+  const handler = getAbility('upgrade_unit');
+  if (handler?.canActivate) {
+    const ctx = { unit: arthur, state, allUnits: state.units };
+    if (!handler.canActivate(ctx)) {
+      throw new Error('Upgrade ability is on cooldown (once per round)');
+    }
+  }
+
+  // Get target from params
+  const targetId = action.params?.targetId as string;
+  if (!targetId) throw new Error('Upgrade requires a target unit');
+
+  const target = getUnit(state, targetId);
+  if (target.playerId !== arthur.playerId) throw new Error('Can only upgrade friendly units');
+  if (target.category !== 'basic') throw new Error('Can only upgrade basic units');
+  if (target.currentHp < target.maxHp) throw new Error('Can only upgrade units at full HP');
+  if (cubeDistance(arthur.position, target.position) !== 1) throw new Error('Target must be adjacent to Arthur');
+
+  // Determine upgrade type
+  const newTypeId = UPGRADE_MAP[target.typeId];
+  if (!newTypeId) throw new Error(`No upgrade path for unit type: ${target.typeId}`);
+
+  const newDef = getUnitDef(player.factionId!, newTypeId);
+  if (!newDef) throw new Error(`Unknown specialty unit: ${newTypeId}`);
+
+  // Transform the unit
+  const upgradedUnit: Unit = {
+    ...target,
+    typeId: newDef.typeId,
+    category: newDef.category,
+    currentHp: newDef.hp,
+    maxHp: newDef.hp,
+    movement: newDef.movement,
+    abilityState: newDef.abilityId ? { abilityId: newDef.abilityId } : {},
+  };
+
+  // Update Arthur's ability state
+  const updatedArthur: Unit = {
+    ...arthur,
+    hasUsedAbilityThisTurn: true,
+    abilityState: {
+      ...arthur.abilityState,
+      lastUpgradeTurnNumber: state.turnNumber,
+    },
+  };
+
+  let units = replaceUnit(state.units, updatedArthur);
+  units = replaceUnit(units, upgradedUnit);
+
+  const newState: GameState = {
+    ...state,
+    units,
+    activeUnitId: updatedArthur.id,
+  };
+
+  const events: GameEvent[] = [{
+    type: 'unitUpgraded',
+    turnNumber: state.turnNumber,
+    playerId: arthur.playerId,
+    upgradedBy: arthur.id,
+    unitId: target.id,
+    fromTypeId: target.typeId,
+    toTypeId: newDef.typeId,
+  }];
+
+  return { state: newState, events };
+}
+
 function applyEndUnitTurn(state: GameState, action: EndUnitTurnAction): ActionResult {
   requireGameplay(state);
   const unit = getUnit(state, action.unitId);
@@ -696,6 +884,11 @@ function applyEndTurn(state: GameState): ActionResult {
   // Reset next player's unit flags (they're about to take their turn)
   const units = state.units.map(u => {
     if (u.playerId === nextPlayer && u.currentHp > 0) {
+      const resetAbilityState = { ...u.abilityState };
+      // Reset per-turn ability flags
+      if (resetAbilityState.redirectUsedThisTurn !== undefined) {
+        resetAbilityState.redirectUsedThisTurn = false;
+      }
       return {
         ...u,
         hasMovedThisTurn: false,
@@ -704,6 +897,7 @@ function applyEndTurn(state: GameState): ActionResult {
         movementUsedThisTurn: 0,
         movementUsedAtAttack: 0,
         activatedThisTurn: false,
+        abilityState: resetAbilityState,
       };
     }
     return u;

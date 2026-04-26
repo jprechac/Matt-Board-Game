@@ -72,6 +72,7 @@ function getDefaultComp(factionId: string) {
     mongols: { basicMelee: 2, basicRanged: 1, specialtyChoices: ['kheshig', 'kheshig', 'pillager', 'pillager', 'pillager'] },
     muscovites: { basicMelee: 2, basicRanged: 1, specialtyChoices: ['streltsy', 'streltsy', 'streltsy', 'cossack_cavalry', 'cossack_cavalry'] },
     vandals: { basicMelee: 2, basicRanged: 1, specialtyChoices: ['raider', 'raider', 'raider', 'vandal_heavy_cavalry', 'vandal_heavy_cavalry'] },
+    english: { basicMelee: 2, basicRanged: 1, specialtyChoices: ['knight', 'knight', 'knight', 'longbowman', 'longbowman'] },
   };
   return comps[factionId] ?? comps.romans;
 }
@@ -1060,5 +1061,481 @@ describe('S18: Anti-basic damage (Pillager)', () => {
       // Pillager base damage = 2, anti_basic_damage = +1 → damage should be >= 3
       expect(attackEvent.damage).toBeGreaterThanOrEqual(3);
     }
+  });
+});
+
+// ========== S19: Caesar redirect_attack — melee ==========
+
+describe('S19: Caesar redirect_attack on melee attacks', () => {
+  it('redirects melee attack damage to an adjacent ally (highest HP)', () => {
+    let state = setupToGameplay(['vikings', 'romans'], 100);
+
+    // We need the viking player to go first and attack a Roman unit
+    // The Romans should have Caesar alive with redirect available
+    const attackerPlayer = state.currentPlayerId;
+    const defenderPlayer = state.players.find(p => p.id !== attackerPlayer)!.id;
+
+    // Ensure attacker is vikings
+    const attackerFaction = state.players.find(p => p.id === attackerPlayer)!.factionId;
+    if (attackerFaction !== 'vikings') {
+      // End turn to get to the viking player
+      state = applyAction(state, { type: 'endTurn' });
+    }
+
+    const currentPlayer = state.currentPlayerId;
+    const otherPlayer = state.players.find(p => p.id !== currentPlayer)!.id;
+
+    // Find Caesar and a Roman ally, and a Viking attacker
+    const caesar = findUnit(state, 'julius_caesar', otherPlayer);
+    const romanAlly = state.units.find(u =>
+      u.playerId === otherPlayer && u.id !== caesar.id && u.currentHp > 0,
+    )!;
+    const attacker = findUnit(state, 'basic_melee', currentPlayer);
+
+    // Position: attacker adjacent to romanAlly, romanAlly adjacent to another Roman unit
+    // Caesar just needs to be alive (no proximity requirement)
+    const centerPos = offsetToCube(9, 9);
+    const neighbors = cubeNeighbors(centerPos);
+    const attackerPos = neighbors[0];
+    const allyPos = centerPos; // The target
+    const redirectPos = neighbors[1]; // Adjacent to the target
+
+    state = moveUnitTo(state, romanAlly.id, allyPos);
+    state = moveUnitTo(state, attacker.id, attackerPos);
+
+    // Place another Roman unit adjacent to the target for redirect
+    const anotherRoman = state.units.find(u =>
+      u.playerId === otherPlayer && u.id !== caesar.id && u.id !== romanAlly.id && u.currentHp > 0,
+    )!;
+    state = moveUnitTo(state, anotherRoman.id, redirectPos);
+
+    // Move Caesar away so he's not adjacent (to prove no proximity needed)
+    state = moveUnitTo(state, caesar.id, offsetToCube(1, 1));
+
+    const allyHpBefore = state.units.find(u => u.id === romanAlly.id)!.currentHp;
+    const redirectHpBefore = state.units.find(u => u.id === anotherRoman.id)!.currentHp;
+
+    // Attack the Roman ally
+    const result = applyActionDetailed(state, { type: 'attack', unitId: attacker.id, targetId: romanAlly.id });
+    const attackEvent = result.events.find(e => e.type === 'attackResolved');
+    const redirectEvent = result.events.find(e => e.type === 'attackRedirected');
+
+    if (attackEvent && attackEvent.type === 'attackResolved' && attackEvent.hit) {
+      // Redirect should have occurred
+      expect(redirectEvent).toBeDefined();
+      if (redirectEvent && redirectEvent.type === 'attackRedirected') {
+        expect(redirectEvent.originalTargetId).toBe(romanAlly.id);
+        expect(redirectEvent.newTargetId).toBe(anotherRoman.id);
+      }
+
+      // Original target should be unharmed
+      const originalAfter = result.state.units.find(u => u.id === romanAlly.id)!;
+      expect(originalAfter.currentHp).toBe(allyHpBefore);
+
+      // Redirect target should have taken damage
+      const redirectAfter = result.state.units.find(u => u.id === anotherRoman.id)!;
+      expect(redirectAfter.currentHp).toBeLessThan(redirectHpBefore);
+
+      // For melee: Roman chooses → highest HP (our heuristic)
+      // The attackResolved event should reference the actual damaged unit
+      expect(attackEvent.targetId).toBe(anotherRoman.id);
+    }
+  });
+
+  it('does not redirect when Caesar is dead', () => {
+    let state = setupToGameplay(['vikings', 'romans'], 100);
+
+    const attackerPlayer = state.currentPlayerId;
+    const attackerFaction = state.players.find(p => p.id === attackerPlayer)!.factionId;
+    if (attackerFaction !== 'vikings') {
+      state = applyAction(state, { type: 'endTurn' });
+    }
+
+    const currentPlayer = state.currentPlayerId;
+    const otherPlayer = state.players.find(p => p.id !== currentPlayer)!.id;
+
+    const caesar = findUnit(state, 'julius_caesar', otherPlayer);
+    const romanAlly = state.units.find(u =>
+      u.playerId === otherPlayer && u.id !== caesar.id && u.currentHp > 0,
+    )!;
+    const attacker = findUnit(state, 'basic_melee', currentPlayer);
+
+    const centerPos = offsetToCube(9, 9);
+    const neighbors = cubeNeighbors(centerPos);
+
+    state = moveUnitTo(state, romanAlly.id, centerPos);
+    state = moveUnitTo(state, attacker.id, neighbors[0]);
+
+    // Place another Roman adjacent
+    const anotherRoman = state.units.find(u =>
+      u.playerId === otherPlayer && u.id !== caesar.id && u.id !== romanAlly.id && u.currentHp > 0,
+    )!;
+    state = moveUnitTo(state, anotherRoman.id, neighbors[1]);
+
+    // Kill Caesar
+    state = setUnitHp(state, caesar.id, 0);
+
+    const result = applyActionDetailed(state, { type: 'attack', unitId: attacker.id, targetId: romanAlly.id });
+    const redirectEvent = result.events.find(e => e.type === 'attackRedirected');
+    expect(redirectEvent).toBeUndefined();
+  });
+
+  it('does not redirect when no allies are adjacent to target', () => {
+    let state = setupToGameplay(['vikings', 'romans'], 100);
+
+    const attackerPlayer = state.currentPlayerId;
+    const attackerFaction = state.players.find(p => p.id === attackerPlayer)!.factionId;
+    if (attackerFaction !== 'vikings') {
+      state = applyAction(state, { type: 'endTurn' });
+    }
+
+    const currentPlayer = state.currentPlayerId;
+    const otherPlayer = state.players.find(p => p.id !== currentPlayer)!.id;
+
+    const romanAlly = state.units.find(u =>
+      u.playerId === otherPlayer && u.currentHp > 0,
+    )!;
+    const attacker = findUnit(state, 'basic_melee', currentPlayer);
+
+    // Position target isolated (no adjacent allies)
+    const isolatedPos = offsetToCube(9, 9);
+    state = moveUnitTo(state, romanAlly.id, isolatedPos);
+    state = moveUnitTo(state, attacker.id, cubeNeighbors(isolatedPos)[0]);
+
+    // Move all other Roman units far away
+    const otherRomans = state.units.filter(u =>
+      u.playerId === otherPlayer && u.id !== romanAlly.id && u.currentHp > 0,
+    );
+    for (let i = 0; i < otherRomans.length; i++) {
+      state = moveUnitTo(state, otherRomans[i].id, offsetToCube(1, 1 + i));
+    }
+
+    const result = applyActionDetailed(state, { type: 'attack', unitId: attacker.id, targetId: romanAlly.id });
+    const redirectEvent = result.events.find(e => e.type === 'attackRedirected');
+    expect(redirectEvent).toBeUndefined();
+  });
+
+  it('redirect only fires once per turn', () => {
+    let state = setupToGameplay(['vikings', 'romans'], 100);
+
+    const attackerPlayer = state.currentPlayerId;
+    const attackerFaction = state.players.find(p => p.id === attackerPlayer)!.factionId;
+    if (attackerFaction !== 'vikings') {
+      state = applyAction(state, { type: 'endTurn' });
+    }
+
+    const currentPlayer = state.currentPlayerId;
+    const otherPlayer = state.players.find(p => p.id !== currentPlayer)!.id;
+
+    const caesar = findUnit(state, 'julius_caesar', otherPlayer);
+    const romanUnit1 = state.units.find(u =>
+      u.playerId === otherPlayer && u.id !== caesar.id && u.currentHp > 0,
+    )!;
+    const romanUnit2 = state.units.find(u =>
+      u.playerId === otherPlayer && u.id !== caesar.id && u.id !== romanUnit1.id && u.currentHp > 0,
+    )!;
+    const romanUnit3 = state.units.find(u =>
+      u.playerId === otherPlayer && u.id !== caesar.id && u.id !== romanUnit1.id && u.id !== romanUnit2.id && u.currentHp > 0,
+    )!;
+
+    const attacker1 = findUnit(state, 'basic_melee', currentPlayer);
+    const attacker2 = state.units.find(u =>
+      u.playerId === currentPlayer && u.id !== attacker1.id && u.currentHp > 0,
+    )!;
+
+    // Set up: two attackers each attacking different Roman units, each with allies adjacent
+    const pos1 = offsetToCube(9, 9);
+    const n1 = cubeNeighbors(pos1);
+    state = moveUnitTo(state, romanUnit1.id, pos1);
+    state = moveUnitTo(state, romanUnit2.id, n1[1]);
+    state = moveUnitTo(state, attacker1.id, n1[0]);
+
+    const pos2 = offsetToCube(9, 12);
+    const n2 = cubeNeighbors(pos2);
+    state = moveUnitTo(state, romanUnit3.id, pos2);
+    state = moveUnitTo(state, attacker2.id, n2[0]);
+
+    // First attack: should trigger redirect
+    const result1 = applyActionDetailed(state, { type: 'attack', unitId: attacker1.id, targetId: romanUnit1.id });
+    state = result1.state;
+
+    // End first unit's turn
+    state = applyAction(state, { type: 'endUnitTurn', unitId: attacker1.id });
+
+    // Move another Roman next to romanUnit3 for potential second redirect
+    const anotherRoman = state.units.find(u =>
+      u.playerId === otherPlayer && u.id !== caesar.id &&
+      u.id !== romanUnit1.id && u.id !== romanUnit2.id && u.id !== romanUnit3.id &&
+      u.currentHp > 0,
+    );
+    if (anotherRoman) {
+      state = moveUnitTo(state, anotherRoman.id, n2[1]);
+    }
+
+    // Second attack: redirect should NOT trigger (already used)
+    const result2 = applyActionDetailed(state, { type: 'attack', unitId: attacker2.id, targetId: romanUnit3.id });
+    const redirect2 = result2.events.find(e => e.type === 'attackRedirected');
+    expect(redirect2).toBeUndefined();
+  });
+
+  it('redirect resets on new turn', () => {
+    let state = setupToGameplay(['vikings', 'romans'], 100);
+
+    const attackerPlayer = state.currentPlayerId;
+    const attackerFaction = state.players.find(p => p.id === attackerPlayer)!.factionId;
+    if (attackerFaction !== 'vikings') {
+      state = applyAction(state, { type: 'endTurn' });
+    }
+
+    const currentPlayer = state.currentPlayerId;
+    const otherPlayer = state.players.find(p => p.id !== currentPlayer)!.id;
+
+    // Manually mark Caesar's redirect as used
+    const caesar = findUnit(state, 'julius_caesar', otherPlayer);
+    state = {
+      ...state,
+      units: state.units.map(u => u.id === caesar.id
+        ? { ...u, abilityState: { ...u.abilityState, redirectUsedThisTurn: true } }
+        : u,
+      ),
+    };
+
+    // End turn and start new turn for the Roman player
+    state = applyAction(state, { type: 'endTurn' });
+
+    // Caesar's redirect should be reset
+    const resetCaesar = state.units.find(u => u.id === caesar.id)!;
+    expect(resetCaesar.abilityState.redirectUsedThisTurn).toBe(false);
+  });
+});
+
+// ========== S20: King Arthur upgrade_unit ==========
+
+describe('S20: King Arthur upgrade_unit ability', () => {
+  it('upgrades basic_melee to knight when adjacent and at full HP', () => {
+    let state = setupToGameplay(['english', 'romans'], 200);
+
+    const currentPlayer = state.currentPlayerId;
+    const playerFaction = state.players.find(p => p.id === currentPlayer)!.factionId;
+    if (playerFaction !== 'english') {
+      state = applyAction(state, { type: 'endTurn' });
+    }
+
+    const arthur = findUnit(state, 'king_arthur', state.currentPlayerId);
+    const basicMelee = findUnit(state, 'basic_melee', state.currentPlayerId);
+
+    // Position them adjacent
+    const centerPos = offsetToCube(9, 9);
+    const neighbors = cubeNeighbors(centerPos);
+    state = moveUnitTo(state, arthur.id, centerPos);
+    state = moveUnitTo(state, basicMelee.id, neighbors[0]);
+
+    // Use upgrade ability
+    const result = applyActionDetailed(state, {
+      type: 'ability',
+      unitId: arthur.id,
+      abilityId: 'upgrade_unit',
+      params: { targetId: basicMelee.id },
+    });
+
+    // Verify upgrade event
+    const upgradeEvent = result.events.find(e => e.type === 'unitUpgraded');
+    expect(upgradeEvent).toBeDefined();
+    if (upgradeEvent && upgradeEvent.type === 'unitUpgraded') {
+      expect(upgradeEvent.fromTypeId).toBe('basic_melee');
+      expect(upgradeEvent.toTypeId).toBe('knight');
+    }
+
+    // Verify unit is now a Knight
+    const upgraded = result.state.units.find(u => u.id === basicMelee.id)!;
+    expect(upgraded.typeId).toBe('knight');
+    expect(upgraded.category).toBe('specialty');
+    // Knight stats: HP 7, Movement 3
+    expect(upgraded.maxHp).toBe(7);
+    expect(upgraded.currentHp).toBe(7);
+    expect(upgraded.movement).toBe(3);
+  });
+
+  it('upgrades basic_ranged to longbowman', () => {
+    let state = setupToGameplay(['english', 'romans'], 200);
+
+    const currentPlayer = state.currentPlayerId;
+    const playerFaction = state.players.find(p => p.id === currentPlayer)!.factionId;
+    if (playerFaction !== 'english') {
+      state = applyAction(state, { type: 'endTurn' });
+    }
+
+    const arthur = findUnit(state, 'king_arthur', state.currentPlayerId);
+    const basicRanged = findUnit(state, 'basic_ranged', state.currentPlayerId);
+
+    const centerPos = offsetToCube(9, 9);
+    const neighbors = cubeNeighbors(centerPos);
+    state = moveUnitTo(state, arthur.id, centerPos);
+    state = moveUnitTo(state, basicRanged.id, neighbors[0]);
+
+    const result = applyActionDetailed(state, {
+      type: 'ability',
+      unitId: arthur.id,
+      abilityId: 'upgrade_unit',
+      params: { targetId: basicRanged.id },
+    });
+
+    const upgraded = result.state.units.find(u => u.id === basicRanged.id)!;
+    expect(upgraded.typeId).toBe('longbowman');
+    expect(upgraded.category).toBe('specialty');
+    // Longbowman stats: HP 4, Movement 2, Range 5
+    expect(upgraded.maxHp).toBe(4);
+    expect(upgraded.movement).toBe(2);
+  });
+
+  it('rejects upgrade of non-adjacent unit', () => {
+    let state = setupToGameplay(['english', 'romans'], 200);
+
+    const currentPlayer = state.currentPlayerId;
+    const playerFaction = state.players.find(p => p.id === currentPlayer)!.factionId;
+    if (playerFaction !== 'english') {
+      state = applyAction(state, { type: 'endTurn' });
+    }
+
+    const arthur = findUnit(state, 'king_arthur', state.currentPlayerId);
+    const basicMelee = findUnit(state, 'basic_melee', state.currentPlayerId);
+
+    // Position them far apart
+    state = moveUnitTo(state, arthur.id, offsetToCube(1, 1));
+    state = moveUnitTo(state, basicMelee.id, offsetToCube(10, 10));
+
+    expect(() => applyAction(state, {
+      type: 'ability',
+      unitId: arthur.id,
+      abilityId: 'upgrade_unit',
+      params: { targetId: basicMelee.id },
+    })).toThrow('Target must be adjacent');
+  });
+
+  it('rejects upgrade of damaged unit', () => {
+    let state = setupToGameplay(['english', 'romans'], 200);
+
+    const currentPlayer = state.currentPlayerId;
+    const playerFaction = state.players.find(p => p.id === currentPlayer)!.factionId;
+    if (playerFaction !== 'english') {
+      state = applyAction(state, { type: 'endTurn' });
+    }
+
+    const arthur = findUnit(state, 'king_arthur', state.currentPlayerId);
+    const basicMelee = findUnit(state, 'basic_melee', state.currentPlayerId);
+
+    const centerPos = offsetToCube(9, 9);
+    const neighbors = cubeNeighbors(centerPos);
+    state = moveUnitTo(state, arthur.id, centerPos);
+    state = moveUnitTo(state, basicMelee.id, neighbors[0]);
+
+    // Damage the basic unit
+    state = setUnitHp(state, basicMelee.id, 3);
+
+    expect(() => applyAction(state, {
+      type: 'ability',
+      unitId: arthur.id,
+      abilityId: 'upgrade_unit',
+      params: { targetId: basicMelee.id },
+    })).toThrow('Can only upgrade units at full HP');
+  });
+
+  it('rejects upgrade of specialty unit', () => {
+    let state = setupToGameplay(['english', 'romans'], 200);
+
+    const currentPlayer = state.currentPlayerId;
+    const playerFaction = state.players.find(p => p.id === currentPlayer)!.factionId;
+    if (playerFaction !== 'english') {
+      state = applyAction(state, { type: 'endTurn' });
+    }
+
+    const arthur = findUnit(state, 'king_arthur', state.currentPlayerId);
+    const knight = findUnit(state, 'knight', state.currentPlayerId);
+
+    const centerPos = offsetToCube(9, 9);
+    const neighbors = cubeNeighbors(centerPos);
+    state = moveUnitTo(state, arthur.id, centerPos);
+    state = moveUnitTo(state, knight.id, neighbors[0]);
+
+    expect(() => applyAction(state, {
+      type: 'ability',
+      unitId: arthur.id,
+      abilityId: 'upgrade_unit',
+      params: { targetId: knight.id },
+    })).toThrow('Can only upgrade basic units');
+  });
+
+  it('respects once-per-round cooldown', () => {
+    let state = setupToGameplay(['english', 'romans'], 200);
+
+    const currentPlayer = state.currentPlayerId;
+    const playerFaction = state.players.find(p => p.id === currentPlayer)!.factionId;
+    if (playerFaction !== 'english') {
+      state = applyAction(state, { type: 'endTurn' });
+    }
+
+    const arthur = findUnit(state, 'king_arthur', state.currentPlayerId);
+    const basicMelee = findUnit(state, 'basic_melee', state.currentPlayerId);
+
+    const centerPos = offsetToCube(9, 9);
+    const neighbors = cubeNeighbors(centerPos);
+    state = moveUnitTo(state, arthur.id, centerPos);
+    state = moveUnitTo(state, basicMelee.id, neighbors[0]);
+
+    // First upgrade succeeds
+    state = applyAction(state, {
+      type: 'ability',
+      unitId: arthur.id,
+      abilityId: 'upgrade_unit',
+      params: { targetId: basicMelee.id },
+    });
+
+    // End Arthur's unit turn and end player turn
+    state = applyAction(state, { type: 'endUnitTurn', unitId: arthur.id });
+    state = applyAction(state, { type: 'endTurn' });
+
+    // Opponent's turn — end it
+    state = applyAction(state, { type: 'endTurn' });
+
+    // Back to English player's turn — should have another basic melee
+    const basicMelee2 = state.units.find(u =>
+      u.typeId === 'basic_melee' && u.playerId === state.currentPlayerId && u.currentHp > 0,
+    );
+    if (basicMelee2) {
+      state = moveUnitTo(state, basicMelee2.id, neighbors[1]);
+
+      // After a full round (both players took turns), upgrade should work again
+      const result = applyActionDetailed(state, {
+        type: 'ability',
+        unitId: arthur.id,
+        abilityId: 'upgrade_unit',
+        params: { targetId: basicMelee2.id },
+      });
+
+      const upgradeEvent = result.events.find(e => e.type === 'unitUpgraded');
+      expect(upgradeEvent).toBeDefined();
+    }
+  });
+
+  it('shows upgrade targets in getUnitActions', () => {
+    let state = setupToGameplay(['english', 'romans'], 200);
+
+    const currentPlayer = state.currentPlayerId;
+    const playerFaction = state.players.find(p => p.id === currentPlayer)!.factionId;
+    if (playerFaction !== 'english') {
+      state = applyAction(state, { type: 'endTurn' });
+    }
+
+    const arthur = findUnit(state, 'king_arthur', state.currentPlayerId);
+    const basicMelee = findUnit(state, 'basic_melee', state.currentPlayerId);
+
+    const centerPos = offsetToCube(9, 9);
+    const neighbors = cubeNeighbors(centerPos);
+    state = moveUnitTo(state, arthur.id, centerPos);
+    state = moveUnitTo(state, basicMelee.id, neighbors[0]);
+
+    const actions = getUnitActions(state, arthur.id);
+    expect(actions.upgradeTargets.length).toBeGreaterThanOrEqual(1);
+    expect(actions.upgradeTargets.some(t => t.id === basicMelee.id)).toBe(true);
   });
 });

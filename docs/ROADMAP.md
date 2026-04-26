@@ -111,8 +111,10 @@ src/engine/
 **Known Issues:**
 - [x] **Streltsy defense ability** — Fixed: now checks attacker's attack range, only blocks melee (range 1) move-and-attack.
 - [ ] **Vandals Heavy Cavalry** missing ability implementation — design doc says "-1 To Hit penalty if attacking a unit in melee range" but no handler exists and no `abilityId` is assigned in faction data.
-- [ ] **Stub abilities** — `priest_buff`, `upgrade_unit`, `redirect_attack`, `medic_heal`, `siege_movement_buff`, `attila_tbd` are registered but have no real logic (return `{}` or `true`). Will be filled in as terrain and active-ability actions are implemented.
-- [ ] **Ability actions** — `useAbility` action type exists in types but `applyAction` throws "not implemented". Active abilities (as opposed to passive hooks) need a handler dispatch system.
+- [ ] **Stub abilities** — `priest_buff`, `siege_movement_buff`, `attila_tbd` are registered but have no real logic (blocked on game design — see Issues #7, #11, #3). `medic_heal` is fully implemented via game.ts.
+- [x] **Ability actions** — `applyAbilityAction` implemented for `upgrade_unit`; dispatch system in place for future active abilities.
+- [x] **Caesar redirect_attack** — Implemented: reactive redirect during attack resolution, auto-selects target (melee=Roman-favorable, ranged=attacker-favorable), once per turn, resets on turn start.
+- [x] **King Arthur upgrade_unit** — Implemented: active ability (adjacent, full HP basic → specialty), once per round. Mapped basic_melee→knight, basic_ranged→longbowman.
 - [ ] **4-player game flow** — Board zones are correct (2v2 teams share top/bottom bases on wider board), but game.ts setup/placement logic doesn't yet handle 4-player team mechanics (team roll-off, A→C→B→D placement order, team-based win conditions).
 - [ ] **Terrain system** — Fully stubbed; design doc says "Jordan note: I don't know how Terrain works." Blocked on rules finalization.
 - [ ] **Test coverage gaps** — `getReachableHexes()` not directly tested; combat tests use seed-hunting pattern; ~12 abilities lack dedicated tests; validation.ts gameplay validators undertested.

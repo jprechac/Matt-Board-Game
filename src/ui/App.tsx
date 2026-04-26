@@ -138,6 +138,11 @@ function GameplayScreen({
         game.dispatch({ type: 'heal', unitId: game.selectedUnitId, targetId: healTarget.id });
         return;
       }
+      const upgradeTarget = game.unitActions.upgradeTargets.find(t => hexKey(t.position) === key);
+      if (upgradeTarget) {
+        game.dispatch({ type: 'ability', unitId: game.selectedUnitId, abilityId: 'upgrade_unit', params: { targetId: upgradeTarget.id } });
+        return;
+      }
     }
     game.deselectUnit();
   }, [game]);
@@ -157,6 +162,12 @@ function GameplayScreen({
       const isHealTarget = game.unitActions.healTargets.some(t => t.id === unit.id);
       if (isHealTarget) {
         game.dispatch({ type: 'heal', unitId: game.selectedUnitId, targetId: unit.id });
+        return;
+      }
+      // Check if it's an upgrade target
+      const isUpgradeTarget = game.unitActions.upgradeTargets.some(t => t.id === unit.id);
+      if (isUpgradeTarget) {
+        game.dispatch({ type: 'ability', unitId: game.selectedUnitId, abilityId: 'upgrade_unit', params: { targetId: unit.id } });
         return;
       }
     }
