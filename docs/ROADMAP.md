@@ -6,22 +6,22 @@
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                   TypeScript Monorepo                │
+│                   TypeScript Monorepo               │
 │                                                     │
 │  ┌───────────────────────────────────────────────┐  │
-│  │              Game Engine (pure TS)             │  │
+│  │              Game Engine (pure TS)            │  │
 │  │  Types · Hex Math · Board · Combat · Movement │  │
 │  │  Abilities · State Machine · Seeded RNG       │  │
 │  └──────────┬──────────┬──────────┬──────────────┘  │
-│             │          │          │                  │
-│      ┌──────▼──┐  ┌────▼────┐  ┌─▼──────────┐      │
+│             │          │          │                 │
+│      ┌──────▼──┐  ┌────▼────┐  ┌─▼──────────┐       │
 │      │ Web UI  │  │   AI    │  │ Simulator   │      │
 │      │ (React) │  │  Bots   │  │ (Node CLI)  │      │
 │      └─────────┘  └─────────┘  └─────────────┘      │
-│                                       │              │
-│                              ┌────────▼────────┐     │
-│                              │ SQLite + Reports │     │
-│                              └─────────────────┘     │
+│                                       │             │
+│                              ┌────────▼──────── ┐   │
+│                              │ SQLite + Reports │   │
+│                              └──────────────────┘   │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -362,15 +362,86 @@ src/engine/
 
 **Goal:** Structured data collection from games for balance analysis.
 
-- [ ] Game result records — factions, army comps, winner, win condition, turn count, seed, damage per unit, survivors
-- [ ] Per-unit statistics — avg damage dealt, avg survival time, kill count, death rate
+- [ ] Shared recorded bot-game runner — reusable `runBotGame()` function that both CLI and simulation use
+- [ ] Game result extraction — pure functions to extract stats from `GameRecording`
+- [ ] Per-unit statistics — damage dealt, damage taken, kills, survival, turns alive
 - [ ] Per-faction statistics — win rate overall, win rate by matchup, avg game length, win condition distribution
-- [ ] SQLite database (`better-sqlite3`) — tables: `games`, `game_units`, `game_events`
+- [ ] SQLite database (`better-sqlite3`) — `games` table + optional `recording_json` blob for replay
 - [ ] CSV/JSON export for external analysis
+- [ ] CLI integration — `bot-match` auto-saves to DB, stats export command
 
 **Verification:**
 - Run 100 bot games, verify all stats computed correctly
 - Spot-check individual game records against replay
+
+<details>
+<summary>Implementation chunks</summary>
+
+#### Chunk 1: Shared Recorded Bot-Game Runner
+
+**Rationale:** Both `bot-match.ts` and future simulation runner need the same game-execution loop. Extract it now so all downstream consumers share one implementation.
+
+**Files to create/modify:**
+- Create `src/ai/run-game.ts` — shared `runBotGame(config) → BotGameResult`
+- Modify `src/cli/bot-match.ts` — refactor to use `runBotGame()`
+- Create `tests/ai/run-game.test.ts`
+
+**Implementation:**
+- `BotGameConfig`: factionA, factionB, armyCompA?, armyCompB?, seed, difficultyA?, difficultyB?, maxActions?
+- `BotGameResult`: finalState, recording, winner, winCondition, turnCount, actionCount, runtimeMs, fallbackCount, seed
+- `runBotGame(config)` — creates game, runs both bots to completion, returns result with `GameRecording`
+- Refactor `bot-match.ts` to call `runBotGame()` and print summary from result
+- Deterministic: same config + seed → same result
+
+**Tests:**
+- `runBotGame` completes without errors for multiple faction pairs
+- Same seed produces identical results (determinism)
+- `bot-match.ts` still works end-to-end after refactor
+
+#### Chunk 2: Result Extraction & Stats
+
+**Files to create/modify:**
+- Create `src/engine/stats.ts` — pure extraction functions
+- Create `tests/engine/stats.test.ts`
+
+**Implementation:**
+- `extractGameResult(recording) → GameResult` — winner, winCondition, turnCount, actionCount, factions, armyComps, seed
+- `extractUnitStats(recording) → UnitStatRecord[]` — per-unit: damage dealt, damage taken, kills, survived (bool), turns alive
+- `extractFactionStats(results: GameResult[]) → FactionStatsReport` — win rate, matchup win rates, avg game length, win condition distribution
+- All pure functions, no side effects — operate on `GameRecording` and `GameResult[]`
+
+**Tests:**
+- Feed a recorded game, verify extracted result matches known outcome
+- Unit stats sum correctly (total damage dealt = total damage taken across all units)
+- Faction stats computed correctly from a set of known results
+- Edge cases: 1-turn game, max-action-cap game
+
+#### Chunk 3: SQLite Storage + CLI Integration + Export
+
+**Files to create/modify:**
+- Add `better-sqlite3` + `@types/better-sqlite3` dependencies
+- Create `src/stats/database.ts` — schema + CRUD
+- Modify `src/cli/bot-match.ts` — add `--db` flag, auto-save after game
+- Create `src/cli/stats-export.ts` — export CLI
+- Create `tests/stats/database.test.ts`
+
+**Implementation:**
+- Schema: `games` table (id, seed, faction_a, faction_b, winner_faction, win_condition, turns, actions, army_comp_a, army_comp_b, runtime_ms, engine_version, created_at), `recording_json` TEXT column (optional, full serialized recording for replay)
+- `schema_version` tracking for future migrations
+- `saveGameResult(db, result, options?)` — insert game row + optionally store recording JSON
+- `getMatchupStats(db, factionA, factionB) → { wins, losses, draws, avgTurns }`
+- `getFactionOverview(db) → { faction, winRate, gamesPlayed, avgTurns }[]`
+- `bot-match.ts`: `--db <path>` flag (default: `data/games.db`), `--no-db` to skip
+- `stats-export.ts`: `--format csv|json`, `--out <path>`, `--summary` (print matchup matrix to console)
+- Add npm scripts: `stats-export`
+
+**Tests:**
+- Save + query round-trip
+- Matchup stats correct after multiple games
+- CSV/JSON export format validation
+- `--summary` output includes all factions played
+
+</details>
 
 ---
 
@@ -381,22 +452,87 @@ src/engine/
 
 **Goal:** Headless CLI tool that runs thousands of games and produces balance reports.
 
-- [ ] CLI tool — `npm run simulate -- --factionA romans --factionB vikings --games 1000 --seed 42`
-- [ ] Scenario configuration — JSON config files for matchups, army comp, board size, terrain, game count
+- [ ] Batch runner CLI — run N games between two factions with deterministic seeding
+- [ ] Seat-order fairness — every matchup runs both seat orders, paired by seed
 - [ ] Parallel execution — Node `worker_threads` for concurrent games (target: 1000+ games/minute)
 - [ ] Progress reporting — CLI progress bar, ETA
-- [ ] Result aggregation:
-  - Matchup matrix (win rate for all 55 faction pairs)
-  - Confidence intervals for win rate differences
-  - Outlier detection (extreme win rates)
-  - Game length distributions
-- [ ] Report output — Markdown/HTML reports saved to `reports/` with timestamp
+- [ ] Tournament mode — round-robin across all 55 faction pairs
+- [ ] Result aggregation — matchup matrix, confidence intervals, outlier detection, game length distributions
+- [ ] Report output — Markdown reports saved to `reports/` with timestamp
 - [ ] Deterministic runs — same master seed → same results (critical for before/after comparisons)
 
 **Verification:**
 - Round-robin tournament (all 55 faction pairs) completes without errors
 - Same seed produces identical results
 - Parallelism doesn't affect determinism
+
+<details>
+<summary>Implementation chunks</summary>
+
+#### Chunk 1: Sequential Batch Runner with Seat-Pairing
+
+**Files to create/modify:**
+- Create `src/cli/simulate.ts` — batch simulation CLI
+- Create `tests/cli/simulate.test.ts`
+
+**Implementation:**
+- `npm run simulate -- --factionA romans --factionB vikings --games 100 --seed 42`
+- Runs N games sequentially using `runBotGame()` from Phase 5
+- **Seat pairing:** for each game index, run two games — A-as-player1 and B-as-player1 — with deterministic seeds derived from `masterSeed + gameIndex`
+- Saves each result to SQLite (using Phase 5 database)
+- Console progress output (simple counter, no external deps yet)
+- Summary output: win rate per faction (with seat breakdown), avg turns, win condition breakdown
+- `--db <path>` flag (default: `data/games.db`)
+
+**Tests:**
+- Small batch (10 games) completes and produces correct summary
+- Determinism: same master seed → same results
+- Seat pairing: both seat orders are run for each game index
+
+#### Chunk 2: Parallel Execution
+
+**Files to create/modify:**
+- Create `src/cli/simulate-worker.ts` — worker thread entry point
+- Modify `src/cli/simulate.ts` — add `--parallel <N>` flag
+
+**Implementation:**
+- Worker file runs a single `runBotGame()` call and returns `BotGameResult`
+- Main thread distributes game configs across N worker threads (default: `os.cpus().length`)
+- Each game gets a unique deterministic seed from master seed — parallel order doesn't matter
+- **DB writes stay on main thread** — workers return results, main thread batches inserts
+- Add progress bar library (`cli-progress` or similar lightweight dep)
+- Verify: parallel results match sequential for same master seed
+
+**Tests:**
+- Parallel results identical to sequential for same seeds
+- Worker errors are caught and reported gracefully
+- Progress bar renders without errors
+
+#### Chunk 3: Tournament Mode + Reports
+
+**Files to create/modify:**
+- Create `src/cli/report.ts` — report generation
+- Modify `src/cli/simulate.ts` — add `--tournament` flag
+- Create `scenarios/` directory with example config
+
+**Implementation:**
+- `--tournament` flag: round-robin across all 55 faction pairs (11 choose 2)
+- Scenario config files: `scenarios/*.json` defining matchups, game counts, army comps, difficulty
+- Result aggregation:
+  - 11×11 matchup matrix with win rates + seat-adjusted rates
+  - Confidence intervals (Wilson score interval for proportions)
+  - Outlier detection: flag matchups where |win_rate - 0.5| > threshold
+  - Game length distributions per matchup
+  - Seat win-rate analysis (detect first-player advantage)
+- Report output: Markdown saved to `reports/report-<timestamp>.md`
+- Include summary stats: most/least balanced matchups, overall faction tier list
+
+**Tests:**
+- Small tournament (3 factions, 6 matchups, 4 games each) completes
+- Report file is valid Markdown
+- Matchup matrix is symmetric (A-vs-B win rate + B-vs-A win rate ≈ 1.0)
+
+</details>
 
 ---
 
@@ -407,14 +543,85 @@ src/engine/
 
 **Goal:** Visual dashboard for interpreting simulation results.
 
-- [ ] Web dashboard — matchup matrix heatmap, faction tier list, per-unit performance charts, game length distributions
-- [ ] Comparison mode — upload two reports (before/after balance change), show deltas per matchup
-- [ ] Drill-down — click matchup cell → game length distribution, common army comps, example replays
-- [ ] Replay viewer — step through recorded games in the UI (board state at each turn)
+- [ ] Data contract — Node-side export generates dashboard-ready summary JSON from SQLite
+- [ ] Dashboard page — React route with sidebar nav (add `react-router-dom`)
+- [ ] Matchup heatmap — 11×11 grid colored by win rate
+- [ ] Faction tier list — ranked by overall win rate with confidence bars
+- [ ] Per-unit performance charts — damage, kills, survival rate
+- [ ] Comparison mode — load two report JSONs, show delta heatmap
+- [ ] Drill-down — click matchup cell → filtered game list, game length distribution
+- [ ] Replay viewer — step through recorded games with existing board components + playback controls
 
 **Verification:**
 - Dashboard correctly renders simulation data
 - Comparison mode shows accurate deltas
+
+<details>
+<summary>Implementation chunks</summary>
+
+#### Chunk 1: Data Contract + Dashboard Shell
+
+**Files to create/modify:**
+- Create `src/stats/export-dashboard.ts` — generate dashboard JSON from SQLite
+- Add `recharts` and `react-router-dom` dependencies
+- Create `src/ui/pages/DashboardPage.tsx` — dashboard layout
+- Modify `src/ui/main.tsx` / `src/ui/App.tsx` — add routing (`/` = game, `/dashboard` = dashboard)
+- Create `src/ui/types/dashboard.ts` — dashboard data types
+
+**Implementation:**
+- `DashboardData` type: matchupMatrix, factionTierList, unitStats, gameCountByMatchup, metaInfo (timestamp, totalGames, engineVersion)
+- `exportDashboardJSON(dbPath, outPath)` — reads SQLite, aggregates, writes JSON
+- Add npm script: `export-dashboard`
+- Dashboard page: sidebar nav (Overview, Matchups, Factions, Units), placeholder content areas
+- Add `react-router-dom` with two routes: `/` (existing game) and `/dashboard`
+- Dashboard loads JSON from `public/dashboard-data.json` (or configurable path)
+
+**Tests:**
+- Export produces valid JSON matching `DashboardData` schema
+- Dashboard route renders without errors
+- Navigation between game and dashboard works
+
+#### Chunk 2: Stats Visualizations
+
+**Files to create/modify:**
+- Create `src/ui/components/dashboard/MatchupHeatmap.tsx`
+- Create `src/ui/components/dashboard/FactionTierList.tsx`
+- Create `src/ui/components/dashboard/UnitPerformance.tsx`
+- Create `src/ui/components/dashboard/GameLengthChart.tsx`
+
+**Implementation:**
+- Matchup heatmap: 11×11 `recharts` grid (or custom SVG), color scale green (50/50) → red (imbalanced), hover shows exact win rate + game count
+- Faction tier list: horizontal bar chart ranked by overall win rate, with Wilson CI error bars
+- Per-unit performance: grouped bar charts for avg damage dealt, avg kills, survival rate by unit type across factions
+- Game length histogram: per-matchup distribution of turn counts
+- All components consume `DashboardData` via context or props
+
+**Tests:**
+- Components render with mock `DashboardData`
+- Heatmap shows correct color for known win rates
+- Tier list is sorted correctly
+
+#### Chunk 3: Comparison Mode + Replay Viewer
+
+**Files to create/modify:**
+- Create `src/ui/components/dashboard/ComparisonView.tsx`
+- Create `src/ui/components/dashboard/ReplayViewer.tsx`
+- Create `src/stats/compare.ts` — delta calculation logic
+
+**Implementation:**
+- Comparison mode: upload/select two `DashboardData` JSONs, show delta heatmap (green = more balanced, red = less balanced), table of biggest changes
+- `compareDashboards(before, after) → DashboardDelta` — pure function computing per-matchup deltas
+- Drill-down: click matchup cell → filtered game list with seed, turns, winner; game length distribution for that pair
+- Replay viewer: load serialized `GameRecording` JSON, use existing `HexGrid` + `UnitToken` components to render board state
+- Playback controls: play/pause, step forward/back, speed slider (1x/2x/5x), turn/action counter
+- Reuse `ReplayPlayer` from `src/engine/replay.ts` for state navigation
+
+**Tests:**
+- Delta calculation correct for known before/after data
+- Replay viewer navigates forward and backward correctly
+- Playback controls update board state
+
+</details>
 
 ---
 
@@ -425,16 +632,98 @@ src/engine/
 
 **Goal:** Three difficulty tiers per faction for varied playtesting and nuanced simulations.
 
-- [ ] Easy bots — simplified heuristics, intentional suboptimal play, no faction-specific tactics
+- [ ] Easy bots — weakened heuristics, random action injection, no faction-specific tactics
 - [ ] Medium bots — Phase 4 bots (already built)
-- [ ] Hard bots — multi-turn lookahead (minimax or MCTS), opponent modeling, optimized faction play, adaptive strategy
-- [ ] Difficulty as simulation variable — e.g., "Does faction X's easy bot beat faction Y's hard bot?" → imbalance signal
+- [ ] Hard bots — 1-ply lookahead, enhanced evaluation, improved faction play
+- [ ] Offline validation harness — statistical validation scripts (not Vitest) for difficulty ordering
 - [ ] ELO ratings — per faction×difficulty, tracked over time as balance evolves
 
 **Verification:**
 - Easy loses to Hard >80% (same faction mirror match)
 - Difficulty differences are perceptible in UI play
 - Hard bots produce longer, more strategic games
+
+<details>
+<summary>Implementation chunks</summary>
+
+#### Chunk 1: Easy Difficulty
+
+**Files to create/modify:**
+- Modify `src/ai/difficulty.ts` — implement easy bot wrapper
+- Create `src/ai/strategies/easy.ts` — easy bot strategy
+- Create `tests/ai/easy-bot.test.ts`
+
+**Implementation:**
+- Easy bot strategy:
+  - Uses generic strategy only (no faction-specific `ScoreAdjuster`)
+  - Reduced evaluation weights (less optimal decision-making)
+  - Random action injection: X% chance (configurable, default ~20%) of picking a random legal action instead of the scored best
+  - Worse placement: randomized placement order instead of strategic front/back
+  - No ability-specific tactics (heals, upgrades, etc. happen only by chance)
+- Wire into `createBotForDifficulty('easy', faction)`
+- Ensure easy bot still plays legal moves and completes games
+
+**Tests:**
+- Easy bot completes games without errors for all 11 factions
+- Easy bot uses random action injection (verify via seeded RNG that some actions differ from optimal)
+- Easy bot uses generic strategy (no faction-specific scoring)
+
+#### Chunk 2: Hard Difficulty — 1-Ply Lookahead + Enhanced Evaluation
+
+**Files to create/modify:**
+- Modify `src/ai/difficulty.ts` — implement hard bot wrapper
+- Create `src/ai/strategies/hard.ts` — hard bot strategy
+- Modify `src/ai/evaluate.ts` — add enhanced evaluation functions
+- Create `tests/ai/hard-bot.test.ts`
+
+**Implementation:**
+- 1-ply lookahead: for each candidate action, apply it to get successor state, evaluate successor, pick action with best successor score
+- Enhanced evaluation:
+  - Better threat assessment: consider attack ranges, not just adjacency
+  - Unit vulnerability: penalize leaving units in enemy attack range after moving
+  - Key hex control: value hexes near enemy base higher
+  - Coordinated attacks: bonus for multiple units threatening same target
+- Improved faction-specific weights (tuned per faction)
+- Performance guard: if lookahead takes >2s per turn, fall back to immediate scoring
+- Wire into `createBotForDifficulty('hard', faction)`
+
+**Tests:**
+- Hard bot completes games without errors for all 11 factions
+- Hard bot evaluates successor states (verify via logging/inspection)
+- Hard bot performance: turns complete within 5s for typical board states
+- Smoke test: Hard beats Medium in a small sample (5 games, same seed)
+
+#### Chunk 3: Offline Validation Harness + ELO
+
+**Rationale:** Statistical validation (100+ game sets, p-value checks) is too slow for CI. Build an offline script that runs validation and ELO tracking separately from Vitest.
+
+**Files to create/modify:**
+- Create `src/cli/validate-difficulty.ts` — offline validation script
+- Create `src/stats/elo.ts` — ELO calculation
+- Modify `src/stats/database.ts` — add `elo_ratings` table
+- Create `tests/stats/elo.test.ts`
+
+**Implementation:**
+- `validate-difficulty.ts`:
+  - Run mirror matches: Easy-vs-Medium, Medium-vs-Hard, Easy-vs-Hard (per faction, N games each)
+  - Report win rates with confidence intervals
+  - Flag violations: Easy should lose to Medium >60%, Medium should lose to Hard >60%, Easy should lose to Hard >80%
+  - Output: summary table + pass/fail per faction
+  - This is a **CLI script** (`npm run validate-difficulty`), NOT a Vitest test
+- `src/stats/elo.ts`:
+  - Standard ELO calculation (K-factor configurable)
+  - `updateElo(ratingA, ratingB, result) → { newRatingA, newRatingB }`
+  - `computeEloRatings(gameResults[]) → EloRatings` — process batch of games
+- SQLite: `elo_ratings` table (faction, difficulty, rating, games_played, updated_at)
+- Track ELO over time: each validation run updates ratings
+- Report: ELO rankings, per-faction difficulty spread
+
+**Tests (Vitest — unit tests only, NOT statistical validation):**
+- ELO calculation produces correct ratings for known outcomes
+- ELO converges: after many games between unequal players, ratings diverge appropriately
+- Database round-trip: save + load ELO ratings
+
+</details>
 
 ---
 
