@@ -526,6 +526,11 @@ src/engine/
   - Seat win-rate analysis (detect first-player advantage)
 - Report output: Markdown saved to `reports/report-<timestamp>.md`
 - Include summary stats: most/least balanced matchups, overall faction tier list
+- **Action-level sanity audit:** When running games, analyze per-unit action sequences for:
+  - Ranged restriction compliance (basic_ranged should never attack after moving >1 hex)
+  - Multi-action turns happening (move→attack→move sequences should occur regularly)
+  - General anomalies: fallback spikes, unusually short/long games, turns with 0 unit actions despite alive units, movement exceeding unit stats
+  - Report violations/anomalies in a dedicated section of the Markdown report
 
 **Tests:**
 - Small tournament (3 factions, 6 matchups, 4 games each) completes
