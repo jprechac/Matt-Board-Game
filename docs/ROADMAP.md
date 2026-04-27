@@ -357,12 +357,12 @@ src/engine/
 
 ### Phase 5: Game Logging & Statistics Tracking
 
-> **Status:** Not started<br>
+> **Status:** Chunk 1 of 3 complete<br>
 > **Depends on:** Phase 2, Phase 4
 
 **Goal:** Structured data collection from games for balance analysis.
 
-- [ ] Shared recorded bot-game runner — reusable `runBotGame()` function that both CLI and simulation use
+- [x] Shared recorded bot-game runner — reusable `runBotGame()` function that both CLI and simulation use
 - [ ] Game result extraction — pure functions to extract stats from `GameRecording`
 - [ ] Per-unit statistics — damage dealt, damage taken, kills, survival, turns alive
 - [ ] Per-faction statistics — win rate overall, win rate by matchup, avg game length, win condition distribution
@@ -377,7 +377,7 @@ src/engine/
 <details>
 <summary>Implementation chunks</summary>
 
-#### Chunk 1: Shared Recorded Bot-Game Runner
+#### Chunk 1: Shared Recorded Bot-Game Runner ✅
 
 **Rationale:** Both `bot-match.ts` and future simulation runner need the same game-execution loop. Extract it now so all downstream consumers share one implementation.
 
