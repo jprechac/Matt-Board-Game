@@ -357,7 +357,7 @@ src/engine/
 
 ### Phase 5: Game Logging & Statistics Tracking
 
-> **Status:** Chunk 2 of 3 complete<br>
+> **Status:** ✅ Complete<br>
 > **Depends on:** Phase 2, Phase 4
 
 **Goal:** Structured data collection from games for balance analysis.
@@ -366,9 +366,9 @@ src/engine/
 - [x] Game result extraction — pure functions to extract stats from `GameRecording`
 - [x] Per-unit statistics — damage dealt, damage taken, kills, survival, turns alive
 - [x] Per-faction statistics — win rate overall, win rate by matchup, avg game length, win condition distribution
-- [ ] SQLite database (`better-sqlite3`) — `games` table + optional `recording_json` blob for replay
-- [ ] CSV/JSON export for external analysis
-- [ ] CLI integration — `bot-match` auto-saves to DB, stats export command
+- [x] SQLite database (`better-sqlite3`) — `games` table + optional `recording_json` blob for replay
+- [x] CSV/JSON export for external analysis
+- [x] CLI integration — `bot-match` auto-saves to DB, stats export command
 
 **Verification:**
 - Run 100 bot games, verify all stats computed correctly
@@ -416,7 +416,7 @@ src/engine/
 - Faction stats computed correctly from a set of known results
 - Edge cases: 1-turn game, max-action-cap game
 
-#### Chunk 3: SQLite Storage + CLI Integration + Export
+#### Chunk 3: SQLite Storage + CLI Integration + Export ✅
 
 **Files to create/modify:**
 - Add `better-sqlite3` + `@types/better-sqlite3` dependencies
