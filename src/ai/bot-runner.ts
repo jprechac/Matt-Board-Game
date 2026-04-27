@@ -1,9 +1,10 @@
 /**
  * Bot runner — incremental bot stepping and batch helpers.
  *
- * Core API is `stepBot()` which produces one action at a time.
- * `runBotTurnActions()` is a convenience for CLI/tests that collects
- * a full turn's worth of actions.
+ * Core API:
+ * - `decideBotAction()` — choose+validate an action without applying it
+ * - `stepBot()` — decide + apply in one call
+ * - `runBotTurnActions()` — collect a full turn's worth of actions
  */
 import type { GameState, Action, PlayerId } from '../engine/types.js';
 import type { Bot } from './types.js';
@@ -12,6 +13,11 @@ import { applyAction } from '../engine/game.js';
 import { getAllLegalActions } from '../engine/actions.js';
 
 // ========== Types ==========
+
+export interface BotDecision {
+  readonly action: Action;
+  readonly fallback: boolean;
+}
 
 export interface StepResult {
   readonly action: Action;
@@ -23,6 +29,32 @@ export interface BotTurnResult {
   readonly actions: readonly Action[];
   readonly finalState: GameState;
   readonly fallbackCount: number;
+}
+
+// ========== Core: Decision (no side effects) ==========
+
+/**
+ * Ask the bot for one action and validate it. Does NOT apply the action.
+ * If the bot's action is invalid or throws, falls back to the first legal action.
+ * Returns null if no legal action exists.
+ */
+export function decideBotAction(
+  state: GameState,
+  bot: Bot,
+  playerId: PlayerId,
+): BotDecision | null {
+  try {
+    const chosen = bot.chooseAction(state, playerId);
+    const validation = validateAction(state, chosen);
+    if (!validation.valid) {
+      const fb = findFallbackAction(state, playerId);
+      return fb ? { action: fb, fallback: true } : null;
+    }
+    return { action: chosen, fallback: false };
+  } catch {
+    const fb = findFallbackAction(state, playerId);
+    return fb ? { action: fb, fallback: true } : null;
+  }
 }
 
 // ========== Core: Single Step ==========
@@ -37,34 +69,15 @@ export function stepBot(
   bot: Bot,
   playerId: PlayerId,
 ): StepResult | null {
-  // Try bot's chosen action
-  let action: Action | null = null;
-  let fallback = false;
+  const decision = decideBotAction(state, bot, playerId);
+  if (!decision) return null;
 
   try {
-    const chosen = bot.chooseAction(state, playerId);
-    const validation = validateAction(state, chosen);
-    if (!validation.valid) {
-      action = findFallbackAction(state, playerId);
-      fallback = true;
-    } else {
-      action = chosen;
-    }
+    const nextState = applyAction(state, decision.action);
+    return { action: decision.action, nextState, fallback: decision.fallback };
   } catch {
-    action = findFallbackAction(state, playerId);
-    fallback = true;
-  }
-
-  // If no action is available at all, return null
-  if (action === null) return null;
-
-  // Apply the action (may still throw for edge cases like blocked attacks)
-  try {
-    const nextState = applyAction(state, action);
-    return { action, nextState, fallback };
-  } catch {
-    // Action validated but threw on apply — try fallback
-    if (!fallback) {
+    // Action validated but threw on apply — try fallback if we haven't already
+    if (!decision.fallback) {
       const fb = findFallbackAction(state, playerId);
       if (fb === null) return null;
       try {
