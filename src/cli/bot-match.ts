@@ -5,12 +5,15 @@
  *   npm run bot-match -- --faction1 romans --faction2 vikings --seed 42
  *   npm run bot-match -- --faction1 mongols --faction2 english --quiet
  *   npm run bot-match -- --faction1 romans --faction2 vikings --verbose
+ *   npm run bot-match -- --faction1 romans --faction2 vikings --db data/games.db
  */
 import type { FactionId, PlayerId, GameState, Action } from '../engine/types.js';
 import { ALL_FACTION_IDS } from '../engine/types.js';
 import { runBotGame } from '../ai/run-game.js';
 import type { BotGameConfig } from '../ai/run-game.js';
 import { parseArgs, formatAction } from './utils/format.js';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // ========== Main ==========
 
@@ -21,11 +24,11 @@ function validateFaction(name: string): FactionId {
   process.exit(1);
 }
 
-function main() {
+async function main() {
   const args = parseArgs(process.argv.slice(2));
 
   if (args.help) {
-    console.log('Usage: npm run bot-match -- --faction1 <f> --faction2 <f> [--seed <n>] [--quiet] [--verbose]');
+    console.log('Usage: npm run bot-match -- --faction1 <f> --faction2 <f> [--seed <n>] [--quiet] [--verbose] [--db <path>] [--no-db]');
     console.log(`Available factions: ${ALL_FACTION_IDS.join(', ')}`);
     process.exit(0);
   }
@@ -35,6 +38,8 @@ function main() {
   const seed = parseInt(args.seed ?? String(Date.now()), 10);
   const quiet = args.quiet === 'true';
   const verbose = args.verbose === 'true';
+  const noDb = args['no-db'] === 'true';
+  const dbPath = noDb ? null : (args.db ?? 'data/games.db');
 
   if (!quiet) {
     console.log(`\n⚔️  Bot Match: ${faction1} vs ${faction2} (seed: ${seed})`);
@@ -56,12 +61,10 @@ function main() {
     seed,
     onAction: verbose || !quiet ? (action: Action, prevState: GameState, nextState: GameState, fallback: boolean) => {
       if (verbose) {
-        // Phase transitions
         if (prevState.phase !== lastPhase) {
           console.log(`\n── ${prevState.phase.toUpperCase()} ──`);
           lastPhase = prevState.phase;
         }
-        // Turn headers in gameplay
         if (prevState.phase === 'gameplay' && prevState.turnNumber !== verboseLastTurn) {
           console.log(`\n── Round ${prevState.turnNumber} (${prevState.currentPlayerId}) ──`);
           verboseLastTurn = prevState.turnNumber;
@@ -69,7 +72,6 @@ function main() {
         const fb = fallback ? ' [FALLBACK]' : '';
         console.log(`  ${formatAction(action, prevState)}${fb}`);
       } else if (!quiet && prevState.phase === 'gameplay') {
-        // Default mode: report when current player changes
         if (lastPlayer !== null && nextState.currentPlayerId !== lastPlayer && nextState.phase === 'gameplay') {
           const faction = factionOf[lastPlayer];
           console.log(`  Turn ${roundNumber} | ${faction} (${lastPlayer}) | ${turnActionCount} actions`);
@@ -106,6 +108,22 @@ function main() {
   const alive = result.finalState.units.filter(u => u.currentHp > 0);
   console.log(`   ${faction1} (player1): ${alive.filter(u => u.playerId === 'player1').length} units alive`);
   console.log(`   ${faction2} (player2): ${alive.filter(u => u.playerId === 'player2').length} units alive`);
+
+  // Save to database
+  if (dbPath) {
+    try {
+      const dir = path.dirname(dbPath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+      const { openDatabase, saveGameResult } = await import('../stats/database.js');
+      const db = openDatabase(dbPath);
+      saveGameResult(db, result);
+      db.close();
+      if (!quiet) console.log(`   💾 Saved to ${dbPath}`);
+    } catch (e) {
+      console.error(`   ⚠️  Failed to save to DB: ${e instanceof Error ? e.message : e}`);
+    }
+  }
 }
 
 main();

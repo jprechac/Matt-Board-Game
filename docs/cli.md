@@ -7,7 +7,7 @@ Command-line tools for running AI matches and simulations. All CLI commands use 
 Run an AI-vs-AI match between any two factions. (4-player support is planned for a future phase.)
 
 ```bash
-npm run bot-match -- --faction1 <faction> --faction2 <faction> [--seed <number>] [--quiet] [--verbose]
+npm run bot-match -- --faction1 <faction> --faction2 <faction> [--seed <number>] [--quiet] [--verbose] [--db <path>] [--no-db]
 ```
 
 ### Arguments
@@ -19,6 +19,8 @@ npm run bot-match -- --faction1 <faction> --faction2 <faction> [--seed <number>]
 | `--seed` | No | `Date.now()` | RNG seed for deterministic replay |
 | `--quiet` | No | off | Suppress progress output (only show final summary) |
 | `--verbose` | No | off | Show every action (phase transitions, turn headers, each action with details) |
+| `--db` | No | `data/games.db` | Path to SQLite database for saving results |
+| `--no-db` | No | off | Skip saving to database |
 | `--help` | No | — | Show usage information |
 
 ### Available Factions
@@ -83,6 +85,42 @@ npm run bot-match -- --faction1 romans --faction2 vikings --seed 12345
   ```
 - **All bots use Medium difficulty** — faction-specific tactics from `src/ai/strategies/`.
 
+## Stats Export
+
+Query and export game statistics from the SQLite database.
+
+```bash
+npm run stats-export -- [options]
+```
+
+### Arguments
+
+| Argument | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `--db` | No | `data/games.db` | Path to SQLite database |
+| `--summary` | No | off | Print faction overview and matchup matrix |
+| `--matchup` | No | — | Show stats for a specific matchup (e.g., `--matchup romans vikings`) |
+| `--format` | No | — | Export format: `csv` or `json` |
+| `--out` | No | stdout | Output file path for exports |
+| `--limit` | No | all | Limit number of exported games |
+| `--help` | No | — | Show usage information |
+
+### Examples
+
+```bash
+# View faction overview and matchup matrix
+npm run stats-export -- --summary
+
+# Export all games as CSV
+npm run stats-export -- --format csv --out reports/games.csv
+
+# Check a specific matchup
+npm run stats-export -- --matchup romans vikings
+
+# Export recent games as JSON
+npm run stats-export -- --format json --limit 100 --out recent.json
+```
+
 ## Architecture
 
 CLI tools live in `src/cli/` and are excluded from the engine TypeScript config (`tsconfig.json`). They run via `tsx` which handles Node.js APIs and ES module resolution. Shared utilities live in `src/cli/utils/`.
@@ -90,7 +128,9 @@ CLI tools live in `src/cli/` and are excluded from the engine TypeScript config 
 | File | Purpose |
 |------|---------|
 | `src/cli/bot-match.ts` | Bot vs Bot match runner |
+| `src/cli/stats-export.ts` | Game stats query and export |
 | `src/cli/utils/format.ts` | Shared utilities (arg parsing, action formatting, round tracking) |
+| `src/stats/database.ts` | SQLite schema, CRUD, and query functions |
 
 ### Adding New CLI Commands
 
