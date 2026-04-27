@@ -357,15 +357,15 @@ src/engine/
 
 ### Phase 5: Game Logging & Statistics Tracking
 
-> **Status:** Chunk 1 of 3 complete<br>
+> **Status:** Chunk 2 of 3 complete<br>
 > **Depends on:** Phase 2, Phase 4
 
 **Goal:** Structured data collection from games for balance analysis.
 
 - [x] Shared recorded bot-game runner — reusable `runBotGame()` function that both CLI and simulation use
-- [ ] Game result extraction — pure functions to extract stats from `GameRecording`
-- [ ] Per-unit statistics — damage dealt, damage taken, kills, survival, turns alive
-- [ ] Per-faction statistics — win rate overall, win rate by matchup, avg game length, win condition distribution
+- [x] Game result extraction — pure functions to extract stats from `GameRecording`
+- [x] Per-unit statistics — damage dealt, damage taken, kills, survival, turns alive
+- [x] Per-faction statistics — win rate overall, win rate by matchup, avg game length, win condition distribution
 - [ ] SQLite database (`better-sqlite3`) — `games` table + optional `recording_json` blob for replay
 - [ ] CSV/JSON export for external analysis
 - [ ] CLI integration — `bot-match` auto-saves to DB, stats export command
@@ -398,7 +398,7 @@ src/engine/
 - Same seed produces identical results (determinism)
 - `bot-match.ts` still works end-to-end after refactor
 
-#### Chunk 2: Result Extraction & Stats
+#### Chunk 2: Result Extraction & Stats ✅
 
 **Files to create/modify:**
 - Create `src/engine/stats.ts` — pure extraction functions
