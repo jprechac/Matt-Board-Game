@@ -83,3 +83,10 @@ Custom skills are in `.github/skills/`. Mention them by name in your prompt (e.g
 - `src/engine/` — Pure game engine (no UI dependencies).
 - `src/cli/` — CLI tools (bot-match, future simulation runner). See `docs/cli.md`.
 - `tests/engine/` — Engine test files (mirrors `src/engine/` structure).
+
+## Documentation Governance
+
+- All project documentation lives in `docs/`. Updates to rules, faction data, CLI usage, or roadmap plans must be reflected in the corresponding markdown files. Changes to documentation should be reviewed for accuracy against the source of truth (engine code for mechanics, faction files for unit stats, CLI code for command usage) before committing.
+- Reference `docs/core-rules.md` when reasoning about game mechanics to ensure that any generated logic or suggestions are consistent with the official rules.
+- The 'core-rules.md' file is the authoritative source for game mechanics. All game logic & testing should be based on the game rules outlined in the core rules. AI should avoid making changes directly to `docs/core-rules.md`, unless specifically instructed to do so. 
+   - Exception to this rule: Comments made by human users in the Issues section of the GitHub repository can be used to make changes directly to core rules.
