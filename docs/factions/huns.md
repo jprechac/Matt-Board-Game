@@ -32,5 +32,17 @@
 
 ### Kiting & Attrition
 
+**Core idea**: Leverage the movement & range of the mounted archers to out-maneuver enemies while using their range to slowly whittle down the enemy army, essentially winning by attrition.
+- Movement would have to gradually move towards the enemy's base to create a "base capture" threat, and avoid having the enemy slowly march on their own base. This has to still be an attacking strategy - the Huns will not be strong with a defensive strategy.
+- In late game the Huns can either rush down opposing units to win by eliminating all enemy units or by swiftly moving towards the enemy base to capture it.
+
+**Suggested army composition**
+- Basic units: 1 basic melee, 1 basic ranged, 1 flex
+- 1 swordsman, 4 archers
+
+**Bot difficulty scaling**
+- Lower difficulty bot struggles to effectively create a threat against the enemy's base while kiting enemy units.
+- Higher difficulty bot will very effectively utilize space (aka the mounter archers' range and movement) to avoid being attacked while still dealing damage. Lower difficulty bot will struggle with keeping the space.
+
 <!-- Footnotes -->
 [^#3]: Need Attila's stats [#3](https://github.com/jprechac/Matt-Board-Game/issues/3)
