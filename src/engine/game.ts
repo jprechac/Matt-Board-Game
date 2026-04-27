@@ -17,7 +17,7 @@ import { validateMove, applyMove, getAvailableMovement } from './movement.js';
 import { resolveCombat, resolveAttack, validateAttack, resolveHeal } from './combat.js';
 import { getFaction, getUnitDef } from './data/factions/index.js';
 import { BASIC_MELEE, BASIC_RANGED } from './data/basic-units.js';
-import { getAttackModifiers, getDefenseModifiers, getAbility } from './abilities/index.js';
+import { getAttackModifiers, getDefenseModifiers, getMovementModifiers, getAbility } from './abilities/index.js';
 
 // ========== Game Configuration ==========
 
@@ -468,7 +468,12 @@ function applyMoveAction(state: GameState, action: MoveAction): ActionResult {
   requireCurrentPlayer(state, unit.playerId);
   requireActivatable(state, unit);
 
-  const validation = validateMove(unit, action.to, state.board, state.units);
+  // Apply ability-based movement modifiers
+  const ctx = { unit, state, allUnits: state.units };
+  const moveMods = getMovementModifiers(ctx);
+  const moveOverride = moveMods.movementOverride;
+
+  const validation = validateMove(unit, action.to, state.board, state.units, moveOverride);
   if (!validation.valid) throw new Error(validation.reason!);
 
   const from = unit.position;

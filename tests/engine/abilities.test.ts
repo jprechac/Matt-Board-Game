@@ -387,3 +387,126 @@ describe('janissary_reload', () => {
     expect(moveMods.movementOverride).toBeUndefined();
   });
 });
+
+describe('basic_ranged_restricted_movement', () => {
+  const ability = getAbility('basic_ranged_restricted_movement')!;
+
+  it('blocks attack when unit has moved more than 1 hex', () => {
+    const pos = offsetToCube(5, 5);
+    const ranged = makeUnit({
+      id: 'ranged', position: pos,
+      typeId: 'basic_ranged',
+      category: 'basic',
+      movement: 2,
+      movementUsedThisTurn: 2,
+      hasMovedThisTurn: true,
+      abilityState: { abilityId: 'basic_ranged_restricted_movement' },
+    });
+    const enemy = makeUnit({ id: 'e', position: offsetToCube(6, 5), playerId: 'player2' });
+
+    const mods = ability.onAttack!(makeCtx(ranged, [ranged, enemy]), enemy);
+    expect(mods.blockAttack).toBe(true);
+  });
+
+  it('allows attack when unit has moved exactly 1 hex', () => {
+    const pos = offsetToCube(5, 5);
+    const ranged = makeUnit({
+      id: 'ranged', position: pos,
+      typeId: 'basic_ranged',
+      category: 'basic',
+      movement: 2,
+      movementUsedThisTurn: 1,
+      hasMovedThisTurn: true,
+      abilityState: { abilityId: 'basic_ranged_restricted_movement' },
+    });
+    const enemy = makeUnit({ id: 'e', position: offsetToCube(6, 5), playerId: 'player2' });
+
+    const mods = ability.onAttack!(makeCtx(ranged, [ranged, enemy]), enemy);
+    expect(mods.blockAttack).toBeUndefined();
+  });
+
+  it('allows attack when unit has not moved', () => {
+    const pos = offsetToCube(5, 5);
+    const ranged = makeUnit({
+      id: 'ranged', position: pos,
+      typeId: 'basic_ranged',
+      category: 'basic',
+      movement: 2,
+      movementUsedThisTurn: 0,
+      abilityState: { abilityId: 'basic_ranged_restricted_movement' },
+    });
+    const enemy = makeUnit({ id: 'e', position: offsetToCube(6, 5), playerId: 'player2' });
+
+    const mods = ability.onAttack!(makeCtx(ranged, [ranged, enemy]), enemy);
+    expect(mods.blockAttack).toBeUndefined();
+  });
+
+  it('restricts post-attack movement so total ≤ 1 (0 pre-attack → 1 remaining)', () => {
+    const pos = offsetToCube(5, 5);
+    const ranged = makeUnit({
+      id: 'ranged', position: pos,
+      typeId: 'basic_ranged',
+      category: 'basic',
+      movement: 2,
+      movementUsedThisTurn: 0,
+      hasAttackedThisTurn: true,
+      movementUsedAtAttack: 0,
+      abilityState: { abilityId: 'basic_ranged_restricted_movement' },
+    });
+
+    const mods = ability.onMove!(makeCtx(ranged, [ranged]));
+    // After attacking with 0 pre-movement, should cap to 1 total
+    expect(mods.movementOverride).toBe(1);
+  });
+
+  it('restricts post-attack movement so total ≤ 1 (1 pre-attack → 0 remaining)', () => {
+    const pos = offsetToCube(5, 5);
+    const ranged = makeUnit({
+      id: 'ranged', position: pos,
+      typeId: 'basic_ranged',
+      category: 'basic',
+      movement: 2,
+      movementUsedThisTurn: 1,
+      hasAttackedThisTurn: true,
+      movementUsedAtAttack: 1,
+      abilityState: { abilityId: 'basic_ranged_restricted_movement' },
+    });
+
+    const mods = ability.onMove!(makeCtx(ranged, [ranged]));
+    // After attacking with 1 pre-movement, should cap to 0 remaining
+    expect(mods.movementOverride).toBe(0);
+  });
+
+  it('no movement restriction when unit has not attacked', () => {
+    const pos = offsetToCube(5, 5);
+    const ranged = makeUnit({
+      id: 'ranged', position: pos,
+      typeId: 'basic_ranged',
+      category: 'basic',
+      movement: 2,
+      movementUsedThisTurn: 0,
+      abilityState: { abilityId: 'basic_ranged_restricted_movement' },
+    });
+
+    const mods = ability.onMove!(makeCtx(ranged, [ranged]));
+    // No restriction before attacking — full movement available
+    expect(mods.movementOverride).toBeUndefined();
+  });
+});
+
+describe('itzcoatl_aura', () => {
+  it('leader own attacks return no modifiers', () => {
+    const ability = getAbility('itzcoatl_aura')!;
+    const pos = offsetToCube(5, 5);
+    const leader = makeUnit({
+      id: 'itz', position: pos,
+      typeId: 'itzcoatl',
+      factionId: 'aztecs',
+      abilityState: { abilityId: 'itzcoatl_aura' },
+    });
+    const enemy = makeUnit({ id: 'e', position: offsetToCube(6, 5), playerId: 'player2' });
+
+    const mods = ability.onAttack!(makeCtx(leader, [leader, enemy]), enemy);
+    expect(mods.toHitModifier).toBeUndefined();
+  });
+});

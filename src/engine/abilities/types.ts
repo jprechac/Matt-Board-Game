@@ -1,4 +1,5 @@
 import type { Unit, GameState, CubeCoord, AttackProfile } from '../types.js';
+import { cubeDistance } from '../hex.js';
 
 // ========== Ability Handler Interface ==========
 
@@ -69,6 +70,17 @@ export interface AbilityHandler {
    * Apply the active ability effect. Returns updated game state.
    */
   activate?(ctx: AbilityContext, params?: Record<string, unknown>): GameState;
+
+  /**
+   * Aura range — if set, this ability has an aura that affects allies within this distance.
+   */
+  readonly auraRange?: number;
+
+  /**
+   * Modify an allied unit's outgoing attack when this unit's aura is in range.
+   * Called on the aura owner when a nearby ally attacks.
+   */
+  onAllyAttack?(auraUnit: Unit, attackerCtx: AbilityContext, target: Unit): CombatModifiers;
 }
 
 // ========== Ability Registry ==========
@@ -92,7 +104,7 @@ export function getAllAbilityIds(): string[] {
 
 // ========== Helper: Get Modifiers ==========
 
-/** Get attack modifiers for a unit's ability (if any) */
+/** Get attack modifiers for a unit's ability (if any), including aura effects from allies */
 export function getAttackModifiers(
   ctx: AbilityContext,
   target: Unit,
@@ -103,10 +115,25 @@ export function getAttackModifiers(
 
   // Try the unit's data-defined abilityId
   const handler = getAbilityForUnit(ctx.unit);
+  let mods: CombatModifiers = {};
   if (handler?.onAttack) {
-    return handler.onAttack(ctx, target);
+    mods = handler.onAttack(ctx, target);
   }
-  return {};
+
+  // Check for aura effects from nearby allied units
+  const auraMods = getExternalAttackModifiers(ctx, target);
+  if (auraMods.toHitModifier || auraMods.damageModifier) {
+    mods = {
+      ...mods,
+      toHitModifier: (mods.toHitModifier ?? 0) + (auraMods.toHitModifier ?? 0) || undefined,
+      damageModifier: (mods.damageModifier ?? 0) + (auraMods.damageModifier ?? 0) || undefined,
+    };
+  }
+  if (auraMods.blockAttack) {
+    mods = { ...mods, blockAttack: true };
+  }
+
+  return mods;
 }
 
 /** Get defense modifiers for a unit's ability (if any) */
@@ -136,4 +163,39 @@ function getAbilityForUnit(unit: Unit): AbilityHandler | undefined {
   // For live units, we store it in abilityState.abilityId at creation time.
   const abilityId = unit.abilityState?.abilityId as string | undefined;
   return abilityId ? getAbility(abilityId) : undefined;
+}
+
+/**
+ * Get attack modifiers from external sources (auras from nearby allied units).
+ * Scans all living allies for aura abilities within range and aggregates their modifiers.
+ */
+export function getExternalAttackModifiers(
+  attackerCtx: AbilityContext,
+  target: Unit,
+): CombatModifiers {
+  let totalToHit = 0;
+  let totalDamage = 0;
+
+  for (const ally of attackerCtx.allUnits) {
+    // Skip self, dead units, and enemies
+    if (ally.id === attackerCtx.unit.id) continue;
+    if (ally.currentHp <= 0) continue;
+    if (ally.playerId !== attackerCtx.unit.playerId) continue;
+
+    const handler = getAbilityForUnit(ally);
+    if (!handler?.auraRange || !handler.onAllyAttack) continue;
+
+    // Check if the attacker is within the aura range
+    const dist = cubeDistance(ally.position, attackerCtx.unit.position);
+    if (dist <= handler.auraRange) {
+      const mods = handler.onAllyAttack(ally, attackerCtx, target);
+      totalToHit += mods.toHitModifier ?? 0;
+      totalDamage += mods.damageModifier ?? 0;
+    }
+  }
+
+  return {
+    ...(totalToHit !== 0 ? { toHitModifier: totalToHit } : {}),
+    ...(totalDamage !== 0 ? { damageModifier: totalDamage } : {}),
+  };
 }

@@ -8,7 +8,7 @@ import { hexKey, parseHexKey, cubeDistance, cubeNeighbors } from './hex.js';
 import { getReachableHexes, getTargetsInRange, getAvailableMovement } from './movement.js';
 import { getUnitDef } from './data/factions/index.js';
 import { getPlacementZoneCells } from './board.js';
-import { getAbility } from './abilities/index.js';
+import { getAbility, getMovementModifiers, getAttackModifiers } from './abilities/index.js';
 
 // ========== Unit-Level Action Queries ==========
 
@@ -32,20 +32,31 @@ export function getUnitActions(state: GameState, unitId: string): UnitActions {
   if (unit.activatedThisTurn) return empty;
   if (state.activeUnitId && state.activeUnitId !== unitId) return empty;
 
+  // Compute ability-based movement override
+  const ctx = { unit, state, allUnits: state.units };
+  const moveMods = getMovementModifiers(ctx);
+  const moveOverride = moveMods.movementOverride;
+
   // Moves: all reachable hexes (excluding current position)
-  const reachable = getReachableHexes(unit, state.board, state.units);
+  const reachable = getReachableHexes(unit, state.board, state.units, moveOverride);
   const currentKey = hexKey(unit.position);
   const moves = [...reachable.keys()]
     .filter(k => k !== currentKey)
     .map(k => parseHexKey(k));
 
-  // Attack targets: enemies in range
+  // Attack targets: enemies in range (check ability restrictions)
   const player = state.players.find(p => p.id === unit.playerId)!;
   const unitDef = getUnitDef(player.factionId!, unit.typeId);
   const range = unitDef?.attack.range ?? 1;
-  const attackTargets = unit.hasAttackedThisTurn
-    ? []
-    : getTargetsInRange(unit, state.units, range);
+  let attackTargets: Unit[] = [];
+  if (!unit.hasAttackedThisTurn) {
+    const potentialTargets = getTargetsInRange(unit, state.units, range);
+    // Filter out targets where the ability would block the attack
+    attackTargets = potentialTargets.filter(target => {
+      const attackMods = getAttackModifiers(ctx, target);
+      return !attackMods.blockAttack;
+    });
+  }
 
   // Heal targets: adjacent friendly units below max HP (for medic units)
   let healTargets: Unit[] = [];

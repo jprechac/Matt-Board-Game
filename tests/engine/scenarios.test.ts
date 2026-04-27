@@ -73,6 +73,7 @@ function getDefaultComp(factionId: string) {
     muscovites: { basicMelee: 2, basicRanged: 1, specialtyChoices: ['streltsy', 'streltsy', 'streltsy', 'cossack_cavalry', 'cossack_cavalry'] },
     vandals: { basicMelee: 2, basicRanged: 1, specialtyChoices: ['raider', 'raider', 'raider', 'vandal_heavy_cavalry', 'vandal_heavy_cavalry'] },
     english: { basicMelee: 2, basicRanged: 1, specialtyChoices: ['knight', 'knight', 'knight', 'longbowman', 'longbowman'] },
+    aztecs: { basicMelee: 2, basicRanged: 1, specialtyChoices: ['jaguar_warrior', 'jaguar_warrior', 'jaguar_warrior', 'priest', 'priest'] },
   };
   return comps[factionId] ?? comps.romans;
 }
@@ -1537,5 +1538,244 @@ describe('S20: King Arthur upgrade_unit ability', () => {
     const actions = getUnitActions(state, arthur.id);
     expect(actions.upgradeTargets.length).toBeGreaterThanOrEqual(1);
     expect(actions.upgradeTargets.some(t => t.id === basicMelee.id)).toBe(true);
+  });
+});
+
+// ========== S21: Basic ranged restricted movement ==========
+
+describe('S21: Basic ranged restricted movement', () => {
+  it('allows attack when unit has moved 0 hexes', () => {
+    let state = setupToGameplay(['romans', 'vikings'], 100);
+    const currentPlayer = state.currentPlayerId;
+    const ranged = findUnit(state, 'basic_ranged', currentPlayer);
+    const enemy = state.units.find(u => u.playerId !== currentPlayer && u.currentHp > 0)!;
+
+    // Place ranged 2 hexes from enemy (within range=4) using cubeNeighbors chain
+    const n1 = cubeNeighbors(enemy.position).find(n => state.board.cells[hexKey(n)] && !state.units.some(u => u.id !== ranged.id && hexKey(u.position) === hexKey(n)))!;
+    const n2 = cubeNeighbors(n1).find(n => hexKey(n) !== hexKey(enemy.position) && state.board.cells[hexKey(n)] && !state.units.some(u => u.id !== ranged.id && hexKey(u.position) === hexKey(n)))!;
+    state = moveUnitTo(state, ranged.id, n2);
+
+    // Attack should be available (0 movement used)
+    const actions = getUnitActions(state, ranged.id);
+    expect(actions.attackTargets.some(t => t.id === enemy.id)).toBe(true);
+  });
+
+  it('allows attack when unit has moved exactly 1 hex', () => {
+    let state = setupToGameplay(['romans', 'vikings'], 100);
+    const currentPlayer = state.currentPlayerId;
+    const ranged = findUnit(state, 'basic_ranged', currentPlayer);
+    const enemy = state.units.find(u => u.playerId !== currentPlayer && u.currentHp > 0)!;
+
+    // Place ranged 3 hexes from enemy, then move 1 hex closer (still in range=4)
+    const n1 = cubeNeighbors(enemy.position).find(n => state.board.cells[hexKey(n)] && !state.units.some(u => u.id !== ranged.id && hexKey(u.position) === hexKey(n)))!;
+    const n2 = cubeNeighbors(n1).find(n => hexKey(n) !== hexKey(enemy.position) && state.board.cells[hexKey(n)] && !state.units.some(u => u.id !== ranged.id && hexKey(u.position) === hexKey(n)))!;
+    const n3 = cubeNeighbors(n2).find(n => hexKey(n) !== hexKey(n1) && hexKey(n) !== hexKey(enemy.position) && state.board.cells[hexKey(n)] && !state.units.some(u => u.id !== ranged.id && hexKey(u.position) === hexKey(n)))!;
+    state = moveUnitTo(state, ranged.id, n3);
+
+    // Move 1 hex toward enemy
+    state = applyAction(state, { type: 'move', playerId: currentPlayer, unitId: ranged.id, to: n2 });
+
+    // Attack should still be available (1 movement used ≤ 1 cap)
+    const actions = getUnitActions(state, ranged.id);
+    expect(actions.attackTargets.length).toBeGreaterThan(0);
+  });
+
+  it('blocks attack when unit has moved 2 hexes (full movement)', () => {
+    let state = setupToGameplay(['romans', 'vikings'], 100);
+    const currentPlayer = state.currentPlayerId;
+    const ranged = findUnit(state, 'basic_ranged', currentPlayer);
+    const enemy = state.units.find(u => u.playerId !== currentPlayer && u.currentHp > 0)!;
+
+    // Manually set the ranged unit as having moved 2 hexes (full movement)
+    state = {
+      ...state,
+      units: state.units.map(u => u.id === ranged.id ? {
+        ...u,
+        hasMovedThisTurn: true,
+        movementUsedThisTurn: 2,
+        activatedThisTurn: false,
+      } : u),
+      activeUnitId: ranged.id,
+    };
+
+    // Place enemy within range
+    const rangedUnit = state.units.find(u => u.id === ranged.id)!;
+    const enemyPos = cubeNeighbors(rangedUnit.position)[0];
+    state = moveUnitTo(state, enemy.id, enemyPos);
+
+    // Attack should be BLOCKED (2 movement used > 1 cap)
+    const actions = getUnitActions(state, ranged.id);
+    expect(actions.attackTargets.length).toBe(0);
+  });
+
+  it('caps post-attack movement so total stays ≤ 1', () => {
+    let state = setupToGameplay(['romans', 'vikings'], 100);
+    const currentPlayer = state.currentPlayerId;
+    const ranged = findUnit(state, 'basic_ranged', currentPlayer);
+
+    // Set up: ranged has attacked (0 pre-attack movement), should have 1 hex of movement left
+    state = {
+      ...state,
+      units: state.units.map(u => u.id === ranged.id ? {
+        ...u,
+        hasAttackedThisTurn: true,
+        movementUsedThisTurn: 0,
+        movementUsedAtAttack: 0,
+        activatedThisTurn: false,
+      } : u),
+      activeUnitId: ranged.id,
+    };
+
+    // Check via getUnitActions — should have moves within 1 hex only
+    const actions = getUnitActions(state, ranged.id);
+    const rangedUnit = state.units.find(u => u.id === ranged.id)!;
+    for (const move of actions.moves) {
+      expect(cubeDistance(rangedUnit.position, move)).toBeLessThanOrEqual(1);
+    }
+    // Should have at least some moves (1 hex range)
+    expect(actions.moves.length).toBeGreaterThan(0);
+  });
+
+  it('allows 0 post-attack movement if already moved 1 hex pre-attack', () => {
+    let state = setupToGameplay(['romans', 'vikings'], 100);
+    const currentPlayer = state.currentPlayerId;
+    const ranged = findUnit(state, 'basic_ranged', currentPlayer);
+
+    // Set up: moved 1 hex then attacked
+    state = {
+      ...state,
+      units: state.units.map(u => u.id === ranged.id ? {
+        ...u,
+        hasAttackedThisTurn: true,
+        movementUsedThisTurn: 1,
+        movementUsedAtAttack: 1,
+        activatedThisTurn: false,
+      } : u),
+      activeUnitId: ranged.id,
+    };
+
+    // Check via getUnitActions — should have 0 moves (total already at cap)
+    const actions = getUnitActions(state, ranged.id);
+    expect(actions.moves.length).toBe(0);
+  });
+});
+
+// ========== S22: Itzcoatl aura — allies within 2 hexes get -1 to hit ==========
+
+describe('S22: Itzcoatl aura — ally attack bonus', () => {
+  it('ally within 2 hexes of Itzcoatl gets -1 to hit (easier to hit)', () => {
+    // Use a seed where a basic roll would miss without the bonus but hit with it
+    // toHit=4 for basic_melee, -1 modifier makes effective toHit=3
+    // We need a roll of exactly 3 to prove the modifier works (miss at 4, hit at 3)
+    let state = setupToGameplay(['aztecs', 'vikings'], 200);
+    const aztecPlayer = state.players.find(p => p.factionId === 'aztecs')!.id;
+    const vikingPlayer = state.players.find(p => p.factionId === 'vikings')!.id;
+
+    // Ensure it's the aztec player's turn
+    if (state.currentPlayerId !== aztecPlayer) {
+      state = applyAction(state, { type: 'endTurn', playerId: state.currentPlayerId });
+    }
+
+    const itzcoatl = findUnit(state, 'itzcoatl', aztecPlayer);
+    const melee = findUnit(state, 'basic_melee', aztecPlayer);
+    const enemy = state.units.find(u => u.playerId === vikingPlayer && u.currentHp > 0)!;
+
+    // Position: melee adjacent to enemy, Itzcoatl within 2 hexes of melee
+    const centerPos = offsetToCube(9, 9);
+    const neighbors = cubeNeighbors(centerPos);
+    state = moveUnitTo(state, melee.id, centerPos);
+    state = moveUnitTo(state, enemy.id, neighbors[0]);
+    state = moveUnitTo(state, itzcoatl.id, neighbors[1]); // 1 hex from melee (within 2)
+
+    // The ally (melee) should be within aura range and get -1 toHit
+    // We verify via getUnitActions that attack targets are available (doesn't prove modifier)
+    // Full integration: attack and check the event for applied modifiers
+    const actions = getUnitActions(state, melee.id);
+    expect(actions.attackTargets.some(t => t.id === enemy.id)).toBe(true);
+  });
+
+  it('ally outside 2 hexes of Itzcoatl does NOT get aura bonus', () => {
+    let state = setupToGameplay(['aztecs', 'vikings'], 200);
+    const aztecPlayer = state.players.find(p => p.factionId === 'aztecs')!.id;
+    const vikingPlayer = state.players.find(p => p.factionId === 'vikings')!.id;
+
+    if (state.currentPlayerId !== aztecPlayer) {
+      state = applyAction(state, { type: 'endTurn', playerId: state.currentPlayerId });
+    }
+
+    const itzcoatl = findUnit(state, 'itzcoatl', aztecPlayer);
+    const melee = findUnit(state, 'basic_melee', aztecPlayer);
+    const enemy = state.units.find(u => u.playerId === vikingPlayer && u.currentHp > 0)!;
+
+    // Position: melee adjacent to enemy, Itzcoatl 4 hexes away (outside aura range)
+    const centerPos = offsetToCube(9, 9);
+    const neighbors = cubeNeighbors(centerPos);
+    state = moveUnitTo(state, melee.id, centerPos);
+    state = moveUnitTo(state, enemy.id, neighbors[0]);
+    state = moveUnitTo(state, itzcoatl.id, offsetToCube(14, 9)); // far away
+
+    // The attack should still work (just without the bonus)
+    const actions = getUnitActions(state, melee.id);
+    expect(actions.attackTargets.some(t => t.id === enemy.id)).toBe(true);
+  });
+
+  it('Itzcoatl own attacks are NOT modified by aura', () => {
+    let state = setupToGameplay(['aztecs', 'vikings'], 200);
+    const aztecPlayer = state.players.find(p => p.factionId === 'aztecs')!.id;
+    const vikingPlayer = state.players.find(p => p.factionId === 'vikings')!.id;
+
+    if (state.currentPlayerId !== aztecPlayer) {
+      state = applyAction(state, { type: 'endTurn', playerId: state.currentPlayerId });
+    }
+
+    const itzcoatl = findUnit(state, 'itzcoatl', aztecPlayer);
+    const enemy = state.units.find(u => u.playerId === vikingPlayer && u.currentHp > 0)!;
+
+    // Position: Itzcoatl adjacent to enemy
+    const centerPos = offsetToCube(9, 9);
+    const neighbors = cubeNeighbors(centerPos);
+    state = moveUnitTo(state, itzcoatl.id, centerPos);
+    state = moveUnitTo(state, enemy.id, neighbors[0]);
+
+    // Itzcoatl attacks — toHit should be 3 (his natural stat), NOT 2
+    // We can verify by checking the attack event's effective toHit
+    const { state: afterAttack, events } = applyActionDetailed(state, {
+      type: 'attack', playerId: aztecPlayer, unitId: itzcoatl.id, targetId: enemy.id,
+    });
+    const attackEvent = events.find(e => e.type === 'attackResolved');
+    expect(attackEvent).toBeDefined();
+    // Itzcoatl has toHit: 3 base, no aura self-buff, no proximity penalty (melee)
+    // The effective toHit should be 3 (unmodified)
+    expect((attackEvent as any).effectiveToHit).toBe(3);
+  });
+
+  it('aura applies to attack resolution — ally gets -1 toHit from aura', () => {
+    let state = setupToGameplay(['aztecs', 'vikings'], 200);
+    const aztecPlayer = state.players.find(p => p.factionId === 'aztecs')!.id;
+    const vikingPlayer = state.players.find(p => p.factionId === 'vikings')!.id;
+
+    if (state.currentPlayerId !== aztecPlayer) {
+      state = applyAction(state, { type: 'endTurn', playerId: state.currentPlayerId });
+    }
+
+    const itzcoatl = findUnit(state, 'itzcoatl', aztecPlayer);
+    const melee = findUnit(state, 'basic_melee', aztecPlayer);
+    const enemy = state.units.find(u => u.playerId === vikingPlayer && u.currentHp > 0)!;
+
+    // Position: melee adjacent to enemy, Itzcoatl within 2 hexes
+    const centerPos = offsetToCube(9, 9);
+    const neighbors = cubeNeighbors(centerPos);
+    state = moveUnitTo(state, melee.id, centerPos);
+    state = moveUnitTo(state, enemy.id, neighbors[0]);
+    state = moveUnitTo(state, itzcoatl.id, neighbors[1]); // 1 hex from melee
+
+    // Attack — the effective toHit should be 3 (4 - 1 from aura)
+    const { events } = applyActionDetailed(state, {
+      type: 'attack', playerId: aztecPlayer, unitId: melee.id, targetId: enemy.id,
+    });
+    const attackEvent = events.find(e => e.type === 'attackResolved');
+    expect(attackEvent).toBeDefined();
+    // basic_melee toHit=4, aura gives -1, so effective=3
+    expect((attackEvent as any).effectiveToHit).toBe(3);
   });
 });

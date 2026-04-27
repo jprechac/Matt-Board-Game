@@ -9,9 +9,18 @@ const basicRangedRestrictedMovement: AbilityHandler = {
   id: 'basic_ranged_restricted_movement',
   description: 'Can only move 1 tile on a turn where it attacks (before or after).',
   onMove(ctx) {
-    // If the unit has attacked (or will attack), restrict total movement to 1
-    // This is enforced at validation time; here we just signal the restriction.
-    // The actual enforcement: if unit attacks this turn, max movement = 1 total.
+    if (ctx.unit.hasAttackedThisTurn) {
+      // Cap total movement to 1 on attack turns
+      const remaining = Math.max(0, 1 - ctx.unit.movementUsedThisTurn);
+      return { movementOverride: remaining };
+    }
+    return {};
+  },
+  onAttack(ctx) {
+    // Block attack if unit already moved more than 1 hex this turn
+    if (ctx.unit.movementUsedThisTurn > 1) {
+      return { blockAttack: true };
+    }
     return {};
   },
 };
@@ -21,9 +30,16 @@ const basicRangedRestrictedMovement: AbilityHandler = {
 const itzcoatlAura: AbilityHandler = {
   id: 'itzcoatl_aura',
   description: 'Allies within 2 hexes have -1 to hit but cannot sacrifice enemies.',
-  // This is an aura — applied during combat resolution by checking proximity
+  // Leader's own attacks are unmodified by the aura
   onAttack(ctx, target) {
-    return {}; // Leader's own attacks are unmodified
+    return {};
+  },
+  // Aura effect is applied via getExternalAttackModifiers in types.ts
+  auraRange: 2,
+  onAllyAttack(auraUnit, attackerCtx, target) {
+    // -1 to hit for allies within range
+    return { toHitModifier: -1 };
+    // TODO: also block sacrifice when sacrifice mechanic is implemented
   },
 };
 

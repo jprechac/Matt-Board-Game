@@ -29,9 +29,10 @@ export function getUnitAt(units: readonly Unit[], coord: CubeCoord): Unit | unde
 /**
  * Get the maximum movement a unit can use right now.
  * After attacking, a unit can only move 1 additional hex (if it hasn't used all movement).
+ * If effectiveMovement is provided (from ability modifiers), it overrides the unit's base movement.
  */
-export function getAvailableMovement(unit: Unit): number {
-  const baseMovement = unit.movement;
+export function getAvailableMovement(unit: Unit, effectiveMovement?: number): number {
+  const baseMovement = effectiveMovement ?? unit.movement;
 
   if (unit.hasAttackedThisTurn) {
     // Cap total post-attack movement to POST_ATTACK_MAX_MOVEMENT
@@ -40,7 +41,7 @@ export function getAvailableMovement(unit: Unit): number {
     return Math.max(0, Math.min(baseRemaining, POST_ATTACK_MAX_MOVEMENT - postAttackMovement));
   }
 
-  return baseMovement - unit.movementUsedThisTurn;
+  return Math.max(0, baseMovement - unit.movementUsedThisTurn);
 }
 
 /**
