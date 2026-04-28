@@ -2,7 +2,7 @@ import type {
   GameState, Action, PlayerId,
   MoveAction, AttackAction, PlaceUnitAction,
   SelectFactionAction, SetArmyCompositionAction, ChoosePriorityAction,
-  EndUnitTurnAction, HealAction,
+  EndUnitTurnAction, HealAction, AbilityAction,
 } from './types.js';
 import { ALL_FACTION_IDS, DEFAULT_ARMY_LIMITS } from './types.js';
 import { hexKey } from './hex.js';
@@ -12,6 +12,7 @@ import { cubeDistance } from './hex.js';
 import { getFaction, getUnitDef } from './data/factions/index.js';
 import { BASIC_MELEE, BASIC_RANGED } from './data/basic-units.js';
 import { getPlacementZoneCells } from './board.js';
+import { getAbility } from './abilities/types.js';
 
 // ========== Validation Result ==========
 
@@ -57,7 +58,7 @@ export function validateAction(
     case 'surrender':
       return { valid: true };
     case 'ability':
-      return { valid: false, reason: 'Ability actions not yet supported' };
+      return validateAbilityAction(state, action);
     case 'placeTerrain':
       return { valid: false, reason: 'Terrain placement not yet supported' };
     default:
@@ -263,6 +264,70 @@ function validateEndUnitTurn(state: GameState, action: EndUnitTurnAction): Valid
 
 function validateEndTurn(state: GameState): ValidationResult {
   if (state.phase !== 'gameplay') return { valid: false, reason: 'Not in gameplay phase' };
+  return { valid: true };
+}
+
+// ========== Ability Validators ==========
+
+const IMPLEMENTED_ABILITIES = new Set(['upgrade_unit']);
+
+function validateAbilityAction(state: GameState, action: AbilityAction): ValidationResult {
+  if (state.phase !== 'gameplay') return { valid: false, reason: 'Not in gameplay phase' };
+
+  if (!IMPLEMENTED_ABILITIES.has(action.abilityId)) {
+    return { valid: false, reason: `Ability '${action.abilityId}' is not yet implemented` };
+  }
+
+  const unit = state.units.find(u => u.id === action.unitId);
+  if (!unit) return { valid: false, reason: 'Unit not found' };
+  if (unit.playerId !== state.currentPlayerId) {
+    return { valid: false, reason: 'Not your unit' };
+  }
+  if (unit.currentHp <= 0) return { valid: false, reason: 'Unit is dead' };
+  if (unit.activatedThisTurn) return { valid: false, reason: 'Unit already activated this turn' };
+  if (state.activeUnitId && state.activeUnitId !== unit.id) {
+    return { valid: false, reason: 'Another unit is currently active' };
+  }
+  if (unit.hasUsedAbilityThisTurn) {
+    return { valid: false, reason: 'Unit has already used ability this turn' };
+  }
+
+  const player = state.players.find(p => p.id === unit.playerId)!;
+  const def = lookupDef(unit.typeId, player.factionId!);
+  if (def.abilityId !== action.abilityId) {
+    return { valid: false, reason: 'Unit does not have this ability' };
+  }
+
+  // Ability-specific validation
+  if (action.abilityId === 'upgrade_unit') {
+    return validateUpgradeAbility(state, unit, action);
+  }
+
+  return { valid: true };
+}
+
+function validateUpgradeAbility(state: GameState, unit: import('./types.js').Unit, action: AbilityAction): ValidationResult {
+  // Check once-per-round cooldown
+  const handler = getAbility('upgrade_unit');
+  if (handler?.canActivate) {
+    const ctx = { unit, state, allUnits: state.units };
+    if (!handler.canActivate(ctx)) {
+      return { valid: false, reason: 'Upgrade ability is on cooldown (once per round)' };
+    }
+  }
+
+  const targetId = action.params?.targetId as string;
+  if (!targetId) return { valid: false, reason: 'Upgrade requires a target unit' };
+
+  const target = state.units.find(u => u.id === targetId);
+  if (!target) return { valid: false, reason: 'Target not found' };
+  if (target.playerId !== unit.playerId) return { valid: false, reason: 'Can only upgrade friendly units' };
+  if (target.category !== 'basic') return { valid: false, reason: 'Can only upgrade basic units' };
+  if (target.currentHp < target.maxHp) return { valid: false, reason: 'Can only upgrade units at full HP' };
+  if (cubeDistance(unit.position, target.position) !== 1) {
+    return { valid: false, reason: 'Target must be adjacent' };
+  }
+
   return { valid: true };
 }
 

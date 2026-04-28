@@ -12,6 +12,7 @@ export interface HexGridProps {
   selectedUnitId?: string | null;
   showCoords?: boolean;
   highlights?: Map<string, string>;
+  flipped?: boolean;
   onCellClick?: (cell: HexCellType) => void;
   onUnitClick?: (unit: Unit) => void;
 }
@@ -22,6 +23,7 @@ export function HexGrid({
   selectedUnitId,
   showCoords = false,
   highlights,
+  flipped = false,
   onCellClick,
   onUnitClick,
 }: HexGridProps) {
@@ -37,46 +39,53 @@ export function HexGrid({
     return map;
   }, [units]);
 
-  const viewBox = useMemo(() => {
-    const vb = getBoardViewBox(board.width, board.height);
-    return `${vb.minX} ${vb.minY} ${vb.vbWidth} ${vb.vbHeight}`;
-  }, [board.width, board.height]);
+  const viewBoxData = useMemo(() => getBoardViewBox(board.width, board.height), [board.width, board.height]);
+
+  const viewBox = `${viewBoxData.minX} ${viewBoxData.minY} ${viewBoxData.vbWidth} ${viewBoxData.vbHeight}`;
+
+  // Rotation center for 180° flip
+  const cx = viewBoxData.minX + viewBoxData.vbWidth / 2;
+  const cy = viewBoxData.minY + viewBoxData.vbHeight / 2;
 
   return (
     <svg
       viewBox={viewBox}
       style={{
         width: '100%',
-        maxWidth: '1200px',
-        height: 'auto',
+        height: '100%',
+        maxHeight: 'calc(100vh - 180px)',
         background: GRID_COLORS.background,
         borderRadius: '8px',
       }}
       data-testid="hex-grid"
     >
-      {/* Hex cells layer */}
-      {cells.map(cell => {
-        const key = hexKey(cell.coord);
-        return (
-          <HexCell
-            key={key}
-            cell={cell}
-            showCoords={showCoords && !unitsByHex.has(key)}
-            highlight={highlights?.get(key)}
-            onClick={onCellClick}
-          />
-        );
-      })}
+      <g transform={flipped ? `rotate(180, ${cx}, ${cy})` : undefined}>
+        {/* Hex cells layer */}
+        {cells.map(cell => {
+          const key = hexKey(cell.coord);
+          return (
+            <HexCell
+              key={key}
+              cell={cell}
+              showCoords={showCoords && !unitsByHex.has(key)}
+              highlight={highlights?.get(key)}
+              onClick={onCellClick}
+              flipped={flipped}
+            />
+          );
+        })}
 
-      {/* Unit tokens layer (rendered on top) */}
-      {units.filter(u => u.currentHp > 0).map(unit => (
-        <UnitToken
-          key={unit.id}
-          unit={unit}
-          selected={unit.id === selectedUnitId}
-          onClick={onUnitClick}
-        />
-      ))}
+        {/* Unit tokens layer (rendered on top) */}
+        {units.filter(u => u.currentHp > 0).map(unit => (
+          <UnitToken
+            key={unit.id}
+            unit={unit}
+            selected={unit.id === selectedUnitId}
+            onClick={onUnitClick}
+            flipped={flipped}
+          />
+        ))}
+      </g>
     </svg>
   );
 }

@@ -92,8 +92,8 @@ describe('HexGrid component', () => {
     const { container } = render(
       <HexGrid board={board} onCellClick={cell => clicked.push(`${cell.coord.q},${cell.coord.r}`)} />,
     );
-    const firstGroup = container.querySelector('g');
-    if (firstGroup) fireEvent.click(firstGroup);
+    const firstPolygon = container.querySelector('polygon');
+    if (firstPolygon) fireEvent.click(firstPolygon);
     expect(clicked).toHaveLength(1);
   });
 });

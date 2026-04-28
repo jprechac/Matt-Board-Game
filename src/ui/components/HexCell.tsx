@@ -7,12 +7,13 @@ export interface HexCellProps {
   cell: HexCellType;
   showCoords?: boolean;
   highlight?: string;
+  flipped?: boolean;
   onClick?: (cell: HexCellType) => void;
 }
 
 const cachedPoints = hexPoints();
 
-export function HexCell({ cell, showCoords, highlight, onClick }: HexCellProps) {
+export function HexCell({ cell, showCoords, highlight, flipped, onClick }: HexCellProps) {
   const { x, y } = useMemo(() => hexToPixel(cell.coord), [cell.coord]);
 
   let fill: string = GRID_COLORS.cellDefault;
@@ -45,6 +46,7 @@ export function HexCell({ cell, showCoords, highlight, onClick }: HexCellProps) 
           fontSize={5}
           fill={GRID_COLORS.coordLabel}
           style={{ pointerEvents: 'none', userSelect: 'none' }}
+          transform={flipped ? 'rotate(180)' : undefined}
         >
           {cell.coord.q},{cell.coord.r}
         </text>

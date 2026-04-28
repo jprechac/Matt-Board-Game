@@ -77,7 +77,7 @@ interface GameAppProps {
 
 function GameApp({ config, initialState, aiConfig, onExit }: GameAppProps) {
   const game = useGameState(initialState ?? config!);
-  const [showCoords, setShowCoords] = useState(false);
+  const [showCoords, setShowCoords] = useState(true);
   const ai = useAIPlayer(game.gameState, game.dispatch, aiConfig ?? null);
 
   const phase = game.gameState.phase;
@@ -99,7 +99,7 @@ function GameApp({ config, initialState, aiConfig, onExit }: GameAppProps) {
   }
 
   // Gameplay phase
-  return <GameplayScreen game={game} showCoords={showCoords} setShowCoords={setShowCoords} onExit={onExit} isAITurn={isAITurn} />;
+  return <GameplayScreen game={game} showCoords={showCoords} setShowCoords={setShowCoords} onExit={onExit} isAITurn={isAITurn} humanPlayerId={aiConfig ? (aiConfig.playerId === 'player2' ? 'player1' : 'player2') : null} />;
 }
 
 // ========== Gameplay Screen ==========
@@ -110,13 +110,18 @@ function GameplayScreen({
   setShowCoords,
   onExit,
   isAITurn,
+  humanPlayerId,
 }: {
   game: ReturnType<typeof useGameState>;
   showCoords: boolean;
   setShowCoords: (v: boolean) => void;
   onExit: () => void;
   isAITurn: boolean;
+  humanPlayerId: string | null;
 }) {
+  // Flip board so human player's side is at bottom (player1 placement zone is at top)
+  const flipped = humanPlayerId === 'player1';
+
   const handleCellClick = useCallback((cell: HexCell) => {
     if (isAITurn) return;
     if (game.gameState.phase !== 'gameplay') return;
@@ -130,6 +135,7 @@ function GameplayScreen({
       }
       const target = game.unitActions.attackTargets.find(t => hexKey(t.position) === key);
       if (target) {
+        console.log('[ATTACK via cell]', { attacker: game.selectedUnitId, targetId: target.id, targetPos: target.position, cellClicked: cell.coord });
         game.dispatch({ type: 'attack', unitId: game.selectedUnitId, targetId: target.id });
         return;
       }
@@ -155,6 +161,7 @@ function GameplayScreen({
       // Check if it's an attack target
       const isTarget = game.unitActions.attackTargets.some(t => t.id === unit.id);
       if (isTarget) {
+        console.log('[ATTACK via unit]', { attacker: game.selectedUnitId, targetId: unit.id, targetPos: unit.position, targetType: unit.typeId });
         game.dispatch({ type: 'attack', unitId: game.selectedUnitId, targetId: unit.id });
         return;
       }
@@ -252,6 +259,7 @@ function GameplayScreen({
             selectedUnitId={game.selectedUnitId}
             showCoords={showCoords}
             highlights={game.moveHighlights}
+            flipped={flipped}
             onCellClick={handleCellClick}
             onUnitClick={handleUnitClick}
           />
