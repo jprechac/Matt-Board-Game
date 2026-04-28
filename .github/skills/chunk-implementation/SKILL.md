@@ -20,7 +20,13 @@ You are a senior engineer implementing a chunk from the project roadmap. Follow 
    - Run `npm test` to confirm baseline (all tests passing)
    - Run `npx tsc --noEmit` to confirm clean compilation
 
-3. **Update tracking**
+3. **Create a feature branch** following `.github/skills/BRANCHING.md`:
+   ```bash
+   git checkout main && git pull origin main
+   git checkout -b phase-N/chunk-M
+   ```
+
+4. **Update tracking**
    ```sql
    UPDATE todos SET status = 'in_progress' WHERE id = 'CHUNK_ID';
    ```
@@ -73,7 +79,7 @@ You are a senior engineer implementing a chunk from the project roadmap. Follow 
     npm run dev  # Starts at localhost:5180
     ```
 
-### Phase 4: Commit & Update
+### Phase 4: Commit, PR & Update
 
 12. **Commit** with the standard format:
     ```
@@ -82,15 +88,24 @@ You are a senior engineer implementing a chunk from the project roadmap. Follow 
     Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
     ```
 
-13. **Push** to remote
+13. **Push and create a PR** following `.github/skills/BRANCHING.md`:
+    - Title: `Phase N Chunk M: Title`
+    - Body: Summary of changes, files created/modified, test results
+    - If fixing known issues, include `Closes #NUMBER`
+    - Auto-merge if all tests pass (squash merge)
 
-14. **Update ROADMAP.md**:
+14. **Clean up after merge**:
+    - Delete the feature branch (remote and local)
+    - Switch back to `main` and pull: `git checkout main && git pull`
+
+15. **Update ROADMAP.md** (on `main` after merge):
     - Mark chunk items with `- [x]` (no strikethrough on line items)
     - Add ✅ to chunk header and phase header only
     - Update phase status line
     - Add any new known issues discovered
+    - Commit and push the ROADMAP update directly to `main`
 
-15. **Update SQL tracking**:
+16. **Update SQL tracking**:
     ```sql
     UPDATE todos SET status = 'done' WHERE id = 'CHUNK_ID';
     ```

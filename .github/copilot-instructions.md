@@ -27,11 +27,14 @@ When planning new chunks for a phase:
 
 When implementing a chunk:
 
-1. Read the chunk plan from `docs/ROADMAP.md`.
-2. Implement all items listed in the chunk.
-3. Write tests for every new module/function.
-4. Ensure all tests pass (`npm test`) and TypeScript compiles clean (`npx tsc --noEmit`).
-5. Commit with message format: `Phase N Chunk M: Title - summary of deliverables`.
+1. Create a feature branch: `git checkout -b phase-N/chunk-M main`.
+2. Read the chunk plan from `docs/ROADMAP.md`.
+3. Implement all items listed in the chunk.
+4. Write tests for every new module/function.
+5. Ensure all tests pass (`npm test`) and TypeScript compiles clean (`npx tsc --noEmit`).
+6. Commit with message format: `Phase N Chunk M: Title - summary of deliverables`.
+7. Push, create a PR targeting `main`, and auto-merge if tests pass.
+8. See `.github/skills/BRANCHING.md` for full branching & PR details.
 
 ### Validating a Chunk
 
@@ -53,6 +56,16 @@ After a chunk is completed (by any agent or session):
 - Individual deliverables use `- [x]` / `- [ ]` checkboxes.
 - Known issues use `- [ ]` under a `**Known Issues:**` heading within the phase.
 
+## Branching & Pull Requests
+
+All work goes through branches and PRs — **never commit directly to `main`**.
+
+- **Chunk work**: Branch `phase-N/chunk-M`, PR into `main` after each chunk.
+- **Bug fixes**: Branch `issue-NUMBER-short-description`, PR into `main`. Include `Closes #NUMBER` in PR body.
+- **Auto-merge** if all tests pass and TypeScript compiles clean. Use squash merge.
+- **GitHub API auth**: Use the `Personal_GitHub_AccessKey` user environment variable.
+- See `.github/skills/BRANCHING.md` for full details.
+
 ## Code Conventions
 
 - **Pure functions over immutable state** — every action produces a new `GameState`.
@@ -70,10 +83,11 @@ Custom skills are in `.github/skills/`. Mention them by name in your prompt (e.g
 | Skill | When to Use | What It Does |
 |-------|-------------|--------------|
 | **session-catchup** | Returning after a break, "where are we?", status check | Reads ROADMAP + git log + tests, presents current state and next steps |
-| **chunk-implementation** | "Implement the next chunk", "start Phase X" | Full workflow: plan → rubber-duck critique → implement → test → commit → push |
+| **chunk-implementation** | "Implement the next chunk", "start Phase X" | Full workflow: branch → plan → rubber-duck critique → implement → test → PR → merge |
 | **test-scenario-audit** | "Check test gaps", "audit coverage", after adding features | Scans engine code vs. tests vs. game rules, identifies missing scenarios |
 | **playtest-triage** | User provides playtest notes or bug reports | Classifies each item (bug/UX/polish), assigns priority, maps to roadmap phase |
 | **visual-inspection** | "Run the app", "let me see the UI", visual review | Starts dev server (port 5180), provides checklist of what to inspect |
+| **bug-report** | Bug found or reported, "fix this bug" | Full lifecycle: issue → branch → TDD fix → regression tests → PR → merge |
 
 ## Key Files
 
